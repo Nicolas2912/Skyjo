@@ -1,0 +1,10 @@
+# Thoughts on how to model something in my project
+
+1. I need two fields:
+    a. One visible field -> Visible for me and the other players
+    b. Field for all cards (hidden and visible)
+
+Solution ideas:
+	field_hidden = {player: (value: int, position: [tuple e.g. (1,2)], hidden or visible: [boolean])}
+	field_visible = numpy array with the value if visible or "*" if hidden
+	 
