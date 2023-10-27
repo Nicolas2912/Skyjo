@@ -10,20 +10,26 @@ class GameField:
         self.length = length
         self.height = height
         self.field_temp = []
-        self.field_hidden = []
         self.field_visible = []
+
+        self.player_list = players
+
         for player in players:
-            start_array = np.array(["*" for _ in range(length * height)]).reshape((length, height))
+            start_array = np.array(["*" for _ in range(height * length)]).reshape((height, length))
             self.field_visible.append({player.name: start_array})
 
         # create a numpy array for every player; a temporary list is needed to store the arrays
         for player in players:
-            numpy_array_player_cards = np.array(player.cards).reshape((length, height))
+            numpy_array_player_cards = np.array(player.cards).reshape((height, length))
             self.field_temp.append({player.name: numpy_array_player_cards})
 
-        print(f"Field temp: {self.field_temp}")
+        self.field_hidden = self.make_field_hidden(self.field_temp, players)
 
-        for counter, player in enumerate(self.field_temp):
+        self.sum_player = self.calculate_sum_player(players)
+
+    def make_field_hidden(self, field_temp, players):
+        field_hidden = []
+        for counter, player in enumerate(field_temp):
             field_hidden_dict = {}
 
             for name, array in player.items():
@@ -31,26 +37,90 @@ class GameField:
                 list_value_position_apparent = []
                 for position, value in np.ndenumerate(array):
                     # Bool indicates if card is hidden or visible; at start all cards are hidden
-                    list_value_position_apparent.append((value, position, False))
+                    list_value_position_apparent.append([value, position, False])
                 field_hidden_dict[name] = list_value_position_apparent
 
-            self.field_hidden.append(field_hidden_dict)
+            field_hidden.append(field_hidden_dict)
             if counter == len(players) - 1:
                 break
 
+        return field_hidden
+
+    def calculate_sum_player(self, players: list):
+        sum_player_dict = {}
+        for player in players:
+            player_carddeck = player.carddeck_player
+            for dic in self.field_hidden:
+                for name, tup in dic.items():
+                    sum_player = 0
+                    for entry in tup:
+                        if entry[2]:
+                            sum_player += player_carddeck.card_value_mapping[str(entry[0])]
+                        else:
+                            sum_player += 0
+                    sum_player_dict[name] = sum_player
+
+        return sum_player_dict
+
+    def flip_card_on_field(self, player, position: tuple):
+        def flip_card_on_field_helper(player, position: tuple):
+            for dic in self.field_hidden:
+                for name, array in dic.items():
+                    if name == player.name:
+                        for entry in array:
+                            if entry[1] == position:
+                                if not entry[2]:
+                                    entry[2] = True
+                                    return True
+                                else:
+                                    return False
+
+        flipped = flip_card_on_field_helper(player, position)
+
+        if flipped:
+            print(f"Card flipped at position {position}")
+
+        while not flipped:
+            print(f"Card already flipped at position {position}!")
+            new_position = input(f"Enter new position: (x,y):")
+            new_position = eval(new_position)
+            flipped = flip_card_on_field_helper(player, new_position)
+
+    def change_card_with_card_on_hand(self, player, position: tuple):
+        if player.card_on_hand is None:
+            print("No card on hand!")
+            return False
+        else:
+            for dic in self.field_hidden:
+                for name, array in dic.items():
+                    if name == player.name:
+                        for entry in array:
+                            if entry[1] == position:
+                                if entry[2]:
+                                    entry[0] = player.card_on_hand
+                                    player.card_on_hand = None
+                                    return True
+                                else:
+                                    entry[0] = player.card_on_hand
+                                    player.card_on_hand = None
+                                    entry[2] = True
+                                    return True
+
     def __str__(self):
+        sum_player = self.calculate_sum_player(self.player_list)
         string = ""
         for dic in self.field_hidden:
             for name, array in dic.items():
-                string += f"{name}:\n"
+                string += f"Name: {name}; Sum: {sum_player[name]}\n"
                 for entry in array:
-                    if entry[2] == False:
+                    if not entry[2]:
                         string += f"*\t"
                     else:
-                        string += f"{entry[0]}"
+                        string += f"{entry[0]}\t"
                     # if more than game_field.length are added, a new line is started
                     if (array.index(entry) + 1) % self.length == 0:
                         string += "\n"
+                string += "----------------\n"
         return string
 
 
@@ -85,6 +155,17 @@ class Player:
             raise TypeError("Name must be a string")
 
         self.cards = random.sample(carddeck.cards, game_field_dimensions[0] * game_field_dimensions[1])
+        self.carddeck_player = Carddeck()
+        self.card_on_hand = None
+
+    def flip_card(self, position: tuple):
+        return position
+
+    def pull_card_from_deck(self, carddeck: Carddeck):
+        card_on_hand = carddeck.cards[0]
+        carddeck.cards.remove(card_on_hand)
+        self.card_on_hand = card_on_hand
+        return card_on_hand
 
 
 if __name__ == "__main__":
@@ -94,3 +175,12 @@ if __name__ == "__main__":
     A = Player("Anna", C, (4, 3))
 
     G = GameField(4, 3, [S, A])
+
+    G.flip_card_on_field(S, (2, 0))
+    G.flip_card_on_field(S, (2, 1))
+    G.flip_card_on_field(S, (2, 2))
+    pulled_card = S.pull_card_from_deck(C)
+    print("pulled card", pulled_card)
+    print(G)
+    G.change_card_with_card_on_hand(S, (0, 0))
+    print(G)
