@@ -43,3 +43,37 @@ Modelling:
 		yval_counter = y_values.count(i)
 		if yval_counter == row_dim:
 			# delete column => set all values in column to 0
+
+	self.hidden_field = [{"Sven": ['value', (0,0), True], ...}]
+	
+3. Another Problem: Now I can set all values in the row or column to 0 if all the values in the row or column are the same. But how to handle other rows and columns that contains also the same values after I set a row/column to 0? In the real game the dimension of the field is changing because you put the cards away.
+	
+	How can I model this here?
+	
+	before: (3x4)
+	
+	o	o	o	o
+	x	x	x	x
+	x	x	x	x
+
+	--> after: (2x3)
+	
+	Idea: Set a special character to the values in the row/column that is deleted e.g. "-"
+	Solved with that, but that results in a similar problem
+
+3.1. When one row/column is deleted the values have different neighbours
+	
+	Like: 
+	4	-	*	*	
+	♦	-	*	*	
+	♦	-	*	*
+	
+	What if (0,2) and (0,3) are also a '4'. Then this line will also be deleted to "-"
+	
+
+
+
+
+
+
+
