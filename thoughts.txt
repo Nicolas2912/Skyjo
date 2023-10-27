@@ -7,4 +7,39 @@
 Solution ideas:
 	field_hidden = {player: (value: int, position: [tuple e.g. (1,2)], hidden or visible: [boolean])}
 	field_visible = numpy array with the value if visible or "*" if hidden
+
+2. How do I check if one line vertically or horizontally is full of with the same numbers, in order to delete the whole line (or set all values to 0)?
+
+Modelling:
+
+	(0,0)	(0,1)	(0,2)	(0,3)
+	(1,0)	(1,1)	(1,2)	(1,3)
+	(2,0)	(2,1)	(2,2)	(2,3)	
+
+	for every line:
+		if first coord the same for row dimension:
+			delete row (set values to 0 [cannot be changed])
+		if second coord the same for column dimension:
+			delete col (set values to 0 [cannot be changed])
 	 
+	[(0,0), (0,1), (0,2), (0,3), (1,0), (1,1),...]
+	
+	counter_row = 0
+	conunter_col = 0
+	
+	# get x and y values
+	x_values = []
+	y_values = []
+	for tup in list:
+		x_values.append(tup[0])
+		y_values.append(tup[1])
+
+	for i in range(col_dim):
+		xval_counter = x_values.count(i)
+		if xval_counter == col_dim:
+			# delete row => set all values in row to 0
+
+	for i in range(row_dim):
+		yval_counter = y_values.count(i)
+		if yval_counter == row_dim:
+			# delete column => set all values in column to 0
