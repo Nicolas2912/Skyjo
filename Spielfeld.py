@@ -11,6 +11,7 @@ class GameField:
         self.height = height
         self.field_temp = []
         self.field_visible = []
+        self.star_string = "\u2666"
 
         self.player_list = players
 
@@ -60,6 +61,24 @@ class GameField:
                             sum_player += 0
                     sum_player_dict[name] = sum_player
 
+        def check_stars_in_line():
+            rows_values = []
+            for dic in self.field_hidden:
+                for name, array in dic.items():
+                    values = [entry[0] for entry in array]
+                    rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
+                    columns_values = list(zip(*rows_values))
+
+                    for row in rows_values:
+                        if row.count(self.star_string) == self.length:
+                            sum_player_dict[name] -= 15
+
+                    for column in columns_values:
+                        if column.count(self.star_string) == self.height:
+                            sum_player_dict[name] -= 10
+
+        check_stars_in_line()
+
         return sum_player_dict
 
     def flip_card_on_field(self, player, position: tuple):
@@ -106,8 +125,67 @@ class GameField:
                                     entry[2] = True
                                     return True
 
+    def check_full_line(self):
+        for dic in self.field_hidden:
+            for name, array in dic.items():
+
+                values = [entry[0] for entry in array]
+                rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
+
+                # Set values of row to 0 if all values are the same
+                for i, row in enumerate(rows_values):
+                    if all(element == row[0] for element in row if element != "-"):
+                        print("in row")
+                        for entry in array:
+                            if entry[1][0] == i and entry[0] != self.star_string:
+                                entry[0] = "-"
+                                entry[2] = True
+
+                columns_values = list(zip(*rows_values))
+
+                # Set column values to 0 if all values are the same
+                for i, column in enumerate(columns_values):
+                    if all(element == column[0] for element in column if element != "-"):
+                        for entry in array:
+                            if entry[1][1] == i and entry[0] != self.star_string:
+                                entry[0] = "-"
+                                entry[2] = True
+
+        for dic in self.field_hidden:
+            for name, array in dic.items():
+                values = [entry[0] for entry in array]
+                rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
+                columns_values = list(zip(*rows_values))
+
+                # Set values of row to 0 if all values are the same
+                for i, row in enumerate(rows_values):
+                    # TODO: Problem with row[0]. It must be indepent of the first element in the row
+                    if all(element == row[0] for element in row if element != "-"):
+                        for entry in array:
+                            if entry[1][0] == i and entry[0] != self.star_string:
+                                entry[0] = "-"
+                                entry[2] = True
+
+                # Set column values to 0 if all values are the same
+                for i, column in enumerate(columns_values):
+                    if all(element == column[0] for element in column if element != "-"):
+                        for entry in array:
+                            if entry[1][1] == i and entry[0] != self.star_string:
+                                entry[0] = "-"
+                                entry[2] = True
+    def _set_values(self, player, position: tuple, value):
+        for dic in self.field_hidden:
+            for name, array in dic.items():
+                if name == player.name:
+                    for entry in array:
+                        if entry[1] == position:
+                            entry[0] = value
+                            entry[2] = True
+
     def __str__(self):
+        self.check_full_line()
         sum_player = self.calculate_sum_player(self.player_list)
+
         string = ""
         for dic in self.field_hidden:
             for name, array in dic.items():
@@ -142,8 +220,14 @@ class Carddeck:
     def value_string_mapping(self):
         cards = list(set(self.cards))
         mapping = {str(card): card for card in cards}
+
+        # add star
         star_string = "\u2666"
         mapping[star_string] = 0
+
+        # add special character that represents a row/column that is deleted (when a row/column is full with same values)
+        mapping["-"] = 0
+
         return mapping
 
 
@@ -175,12 +259,17 @@ if __name__ == "__main__":
     A = Player("Anna", C, (4, 3))
 
     G = GameField(4, 3, [S, A])
+    star = G.star_string
 
-    G.flip_card_on_field(S, (2, 0))
-    G.flip_card_on_field(S, (2, 1))
-    G.flip_card_on_field(S, (2, 2))
-    pulled_card = S.pull_card_from_deck(C)
-    print("pulled card", pulled_card)
-    print(G)
-    G.change_card_with_card_on_hand(S, (0, 0))
+
+    G._set_values(S, (0, 0), 1)
+    G._set_values(S, (1, 0), 1)
+    G._set_values(S, (2, 0), 1)
+
+    G._set_values(S, (0, 1), 3)
+    G._set_values(S, (0, 2), 3)
+    G._set_values(S, (0, 3), 3)
+
+    print(G.field_hidden)
+
     print(G)
