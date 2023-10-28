@@ -70,10 +70,17 @@ Modelling:
 	
 	What if (0,2) and (0,3) are also a '4'. Then this line will also be deleted to "-"
 	
+	Solved with counting the elements in row/column. Dictionary thats stores element (key) and number of occurence in row/column (values). If number is >= 3 than this row/column will be set to "-". 
+	
+	Another problem: First I check rows then I check cloumns. Problem in the following case:
+	
+	4	-[4]	2	-[4]
+	*	-[4]	*	-[4]
+	4	-[4]	4	-[4]
+
+	in [] is the number before the column will set to "-". Now: last row will also be set to "-" because the column will be checked after row. But the rule is: Set row/column to "-" if there are more than 3 values the same in the same row/column.
 
 
-
-
-
-
-
+	How can I solve that?
+	=> Had to add check_full_line() to method "_set_values()"
+	In __str__ when I print the field I will call check_full_line()
