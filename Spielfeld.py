@@ -6,7 +6,7 @@ random.seed(42)
 
 
 class GameField:
-    def __init__(self, length: int, height: int, players: list):
+    def __init__(self, length: int, height: int, players: list, carddeck):
         self.length = length
         self.height = height
         self.field_temp = []
@@ -14,6 +14,8 @@ class GameField:
         self.star_string = "\u2666"
 
         self.player_list = players
+
+        self.carddeck = carddeck
 
         for player in players:
             start_array = np.array(["*" for _ in range(height * length)]).reshape((height, length))
@@ -26,7 +28,7 @@ class GameField:
 
         self.field_hidden = self.make_field_hidden(self.field_temp, players)
 
-        self.sum_player = self.calculate_sum_player(players)
+        self.sum_player = self.calculate_sum_player(players, self.carddeck.value_string_mapping())
 
     def make_field_hidden(self, field_temp, players):
         field_hidden = []
@@ -229,7 +231,7 @@ class GameField:
 
     def __str__(self):
         self.check_full_line()
-        sum_player = self.calculate_sum_player(self.player_list)
+        sum_player = self.calculate_sum_player(self.player_list, self.carddeck.value_string_mapping())
 
         string = f""
         for dic in self.field_hidden:
@@ -314,8 +316,12 @@ class Player:
 
     def put_card_on_discard_stack(self, carddeck: Carddeck):
         if self.card_on_hand is not None:
-            carddeck.discard_stack.append(self.card_on_hand)
-            self.card_on_hand = None
+            if self.card_on_hand.isdigit():
+                carddeck.discard_stack.append(int(self.card_on_hand))
+                self.card_on_hand = None
+            else:
+                carddeck.discard_stack.append(self.card_on_hand)
+                self.card_on_hand = None
         else:
             raise ValueError("Player has no card on hand! Cannot put card on discard stack!")
 
@@ -329,14 +335,18 @@ if __name__ == "__main__":
     S = Player("Sven", C, (4, 3))
     A = Player("Anna", C, (4, 3))
 
-    G = GameField(4, 3, [S, A])
+    G = GameField(4, 3, [S, A], C)
     star = G.star_string
 
-    print(G.field_hidden)
-    print(G)
     S.pull_card_from_discard_stack(C)
-    print(S.card_on_hand)
+    print("first pull from carddeck:")
+    print("card on hand:", S.card_on_hand)
+    print(f"Discard Stack after pull: {C.discard_stack}")
     G.change_card_with_card_on_hand(S, (0, 0))
-    S.put_card_on_discard_stack(C)
+    print("Field after change")
     print(G)
-    print(S.card_on_hand)
+    print(f"Discard Stack after change: {C.discard_stack}")
+    print(f"Card on hand after change:{S.card_on_hand}")
+    S.put_card_on_discard_stack(C)
+    print(f"Discard Stack after put: {C.discard_stack}")
+    print(f"Card on hand after put:{S.card_on_hand}")
