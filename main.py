@@ -1,6 +1,6 @@
-from gamefield import GameField
-from player import Player
-from carddeck import Carddeck
+from Game.gamefield import GameField
+from Game.player import Player
+from Game.carddeck import Carddeck
 
 
 class Game:
