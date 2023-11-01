@@ -216,6 +216,12 @@ class Game:
 
 if __name__ == "__main__":
     carddeck = Carddeck()
-    G = Game(["a", "b"], (4, 3), carddeck)
+
+    n = int(input("How many players?"))
+    player_names = []
+    for i in range(n):
+        player_names.append(input(f"Enter name of player {i + 1}:"))
+
+    G = Game(player_names, (4, 3), carddeck)
     G.start()
     G.run()
