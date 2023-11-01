@@ -32,14 +32,29 @@ class Game:
     def start(self):
         # starts game. Every player has to flip to cards. The player with the lowest sum of the two cards starts.
 
+        print("Starting Skyjo!")
+
         # flip two cards for every player
         for player_name, player in self.players.items():
-            position1 = input(f"Player {player_name} flip two cards! Enter position one [(0,0) - (2,3)]:")
-            position1 = eval(position1)
+            while True:
+                try:
+                    position1 = input(f"Player {player_name} flip two cards! Enter position one [(0,0) - (2,3)]:")
+                    position1 = eval(position1)
+                    break
+                except Exception as e:
+                    print(f"Error: {e}. Please enter a valid position.")
+
             self.game_field.flip_card_on_field(player, position1)
             print(self.game_field)
-            position2 = input(f"Enter position two [(0,0) - (2,3)]:")
-            position2 = eval(position2)
+
+            while True:
+                try:
+                    position2 = input(f"Enter position two [(0,0) - (2,3)]:")
+                    position2 = eval(position2)
+                    break
+                except Exception as e:
+                    print(f"Error: {e}. Please enter a valid position.")
+
             self.game_field.flip_card_on_field(player, position2)
             print(self.game_field)
 
@@ -59,87 +74,130 @@ class Game:
                 self.player_turn_order.append(player.name)
 
         print(f"Player turn order: {self.player_turn_order}\n")
-        print("-"*50)
+        print("-" * 50)
+
+    def flip_all_cards(self):
+        for dic in self.game_field.field_hidden:
+            for name, array in dic.items():
+                for entry in array:
+                    entry[2] = True
+
+    def player_turn(self, player_name):
+        print(f"Player {player_name} turn!")
+
+        def get_valid_action(prompt, valid_actions):
+            action = input(prompt)
+
+            while action not in valid_actions:
+                print("Invalid action! Try again!")
+                action = input(prompt)
+
+            return action
+
+        action = get_valid_action(
+            "Choose action (pull deck : pd, pull discard stack : pds):",
+            ["pd", "pds"]
+        )
+
+        if action == "pd":
+            self.players[player_name].pull_card_from_deck(self.carddeck)
+            print(f"Your card on hand: {self.players[player_name].card_on_hand}")
+
+            action = get_valid_action(
+                "Choose action (put card on discard stack : pcds, change card with card on field : cc):",
+                ["pcds", "cc"]
+            )
+
+            if action == "pcds":
+                self.players[player_name].put_card_on_discard_stack(self.carddeck)
+
+                while True:
+                    try:
+                        position = eval(input("Choose position on field [(0,0) - (2,3)]:"))
+                        break  # Wenn die Eingabe erfolgreich evaluiert werden konnte, beende die Schleife
+                    except Exception as e:
+                        print(f"Error: {e}. Please enter a valid position.")
+
+                self.game_field.flip_card_on_field(self.players[player_name], position)
+
+                print(self.game_field)
+
+            elif action == "cc":
+                while True:
+                    try:
+                        position = eval(input("Choose position on field [(0,0) - (2,3)]:"))
+                        break  # Wenn die Eingabe erfolgreich evaluiert werden konnte, beende die Schleife
+                    except Exception as e:
+                        print(f"Error: {e}. Please enter a valid position.")
+
+                self.game_field.change_card_with_card_on_hand(self.players[player_name], position)
+                self.players[player_name].put_card_on_discard_stack(self.carddeck)
+
+                print(self.game_field)
+
+        elif action == "pds":
+            self.players[player_name].pull_card_from_discard_stack(self.carddeck)
+            print(f"Your card on hand: {self.players[player_name].card_on_hand}")
+
+            action = get_valid_action(
+                "Choose action (put card on discard stack : pcds, change card with card on field : cc):",
+                ["pcds", "cc"]
+            )
+
+            if action == "pcds":
+                self.players[player_name].put_card_on_discard_stack(self.carddeck)
+
+                while True:
+                    try:
+                        position = eval(input("Choose position on field [(0,0) - (2,3)]:"))
+                        break  # Wenn die Eingabe erfolgreich evaluiert werden konnte, beende die Schleife
+                    except Exception as e:
+                        print(f"Error: {e}. Please enter a valid position.")
+
+                self.game_field.flip_card_on_field(self.players[player_name], position)
+
+                print(self.game_field)
+
+            elif action == "cc":
+                while True:
+                    try:
+                        position = eval(input("Choose position on field [(0,0) - (2,3)]:"))
+                        break  # Wenn die Eingabe erfolgreich evaluiert werden konnte, beende die Schleife
+                    except Exception as e:
+                        print(f"Error: {e}. Please enter a valid position.")
+
+                self.game_field.change_card_with_card_on_hand(self.players[player_name], position)
+                self.players[player_name].put_card_on_discard_stack(self.carddeck)
+
+                print(self.game_field)
 
     def run(self):
+        end_player = False
+        end = False
+
         while not self.end:
-            last_round = None
 
             for i, player_name in enumerate(self.player_turn_order):
-                print(f"Player {player_name} turn!")
+                self.player_turn(player_name)
+                end, name = self.game_field.check_end()
 
-                action = input("Choose action (pull deck : pd, pull discard stack : pds):")
+                if end and name in self.player_turn_order:
+                    print(f"Player {name} ended the game. Everyone else has one more turn!")
+                    self.player_turn_order.remove(name.strip())
+                    end_player = True
+                    break
 
-                while action not in ["pd", "pds"]:
-                    print("Invalid action! Try again!")
-                    action = input("Choose action (pull deck : pd, pull discard stack : pds):")
+            if end_player:
+                for i, player_name in enumerate(self.player_turn_order):
+                    self.player_turn(player_name)
 
-                if action == "pd":
-                    self.players[player_name].pull_card_from_deck(self.carddeck)
-                    print(f"Your card on hand: {self.players[player_name].card_on_hand}")
+                    end, name = self.game_field.check_end()
 
-                    action = input(
-                        "Choose action (put card on discard stack : pcds, change card with card on field : cc):")
-
-                    while action not in ["pcds", "cc"]:
-                        print("Invalid action! Try again!")
-                        action = input("Choose action (pull cardm from discard stack : pd, change card : cc):")
-
-                    if action == "pcds":
-                        self.players[player_name].put_card_on_discard_stack(self.carddeck)
-
-                        position = input("Choose position on field [(0,0) - (2,3)]:")
-                        position = eval(position)
-                        self.game_field.flip_card_on_field(self.players[player_name], position)
-                        print(self.game_field)
-
-                        valid_action2 = True
-
-                    elif action == "cc":
-                        position = input("Choose position on field [(0,0) - (2,3)]:")
-                        position = eval(position)
-                        self.game_field.change_card_with_card_on_hand(self.players[player_name], position)
-                        self.players[player_name].put_card_on_discard_stack(self.carddeck)
-                        print(self.game_field)
-
-                elif action == "pds":
-                    self.players[player_name].pull_card_from_discard_stack(self.carddeck)
-                    print(f"Your card on hand: {self.players[player_name].card_on_hand}")
-
-                    action = input(
-                        "Choose action (put card on discard stack : pcds, change card with card on field : cc):")
-
-                    while action not in ["pcds", "cc"]:
-                        print("Invalid action! Try again!")
-                        action = input("Choose action (pull card from discard stack : pd, change card : cc):")
-
-                    if action == "pcds":
-                        self.players[player_name].put_card_on_discard_stack(self.carddeck)
-
-                        position = input("Choose position on field [(0,0) - (2,3)]:")
-                        position = eval(position)
-                        self.game_field.flip_card_on_field(self.players[player_name], position)
-                        print(self.game_field)
-
-                    elif action == "cc":
-                        position = input("Choose position on field [(0,0) - (2,3)]:")
-                        position = eval(position)
-                        self.game_field.change_card_with_card_on_hand(self.players[player_name], position)
-                        self.players[player_name].put_card_on_discard_stack(self.carddeck)
-                        print(self.game_field)
-
-            end, name = self.game_field.check_end()
-
-            print(end)
-
-            if end:
-                print(f"Player {name} ended the game. Everyone else has one more turn!")
-                last_round = i
-                print(f"Last round: {last_round}")
-                continue
-
-            if end and i == last_round:
+            if end and end_player:
                 self.end = True
+                self.flip_all_cards()
+                print("Final board:\n", self.game_field)
+                break
 
         print("Game ended!")
 
@@ -147,15 +205,13 @@ class Game:
         card_sum = self.game_field.calculate_sum_player(list(self.players.values()), self.card_value_mapping)
         # sort card_sum dictionary by value
         card_sum = {k: v for k, v in sorted(card_sum.items(), key=lambda item: item[1])}
-        print(f"The winner is: {list(card_sum.keys())[0]}")
+        print(f"The winner is: {list(card_sum.keys())[0]}, Sum: {list(card_sum.values())[0]}")
 
         # output of the other places
         for i, player_name in enumerate(list(card_sum.keys())[1:]):
-            print(f"{i+2}. place: {player_name}")
+            print(f"{i + 2}. place: {player_name}, Sum: {list(card_sum.values())[i + 1]}")
 
-        print("-"*50)
-
-
+        print("=" * 50)
 
 
 if __name__ == "__main__":
