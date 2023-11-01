@@ -251,7 +251,7 @@ class GameField:
         self.check_full_line()
         sum_player = self.calculate_sum_player(self.player_list, self.carddeck.value_string_mapping())
 
-        string = f"\nDiscard stack: {self.carddeck.discard_stack}\n"
+        string = f"\nDiscard stack: {self.carddeck.discard_stack[-1]}\n"
         for dic in self.field_hidden:
             for name, array in dic.items():
                 string += f"Name: {name}; Sum: {sum_player[name]}\n"
