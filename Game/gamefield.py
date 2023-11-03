@@ -1,7 +1,9 @@
-import random
-import numpy as np
+from carddeck import Carddeck
+from player import Player
 
-# set seed for reproducibility
+import numpy as np
+import random
+
 random.seed(42)
 
 
@@ -64,26 +66,30 @@ class GameField:
                     sum_player_dict[name] = sum_player
 
         def check_stars_in_line():
-            rows_values = []
             for dic in self.field_hidden:
                 for name, array in dic.items():
                     values = [entry[0] for entry in array]
                     rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
                     columns_values = list(zip(*rows_values))
 
-                    for row in rows_values:
-                        if row.count(self.star_string) == self.length:
+                    values_flipped = [entry[2] for entry in array]
+                    rows_values_flipped = [values_flipped[i:i + self.length] for i in
+                                           range(0, len(values_flipped), self.length)]
+                    columns_values_flipped = list(zip(*rows_values_flipped))
+
+                    for row, flip in zip(rows_values, rows_values_flipped):
+                        if row.count(self.star_string) == self.length and all(flip):
                             sum_player_dict[name] -= 15
 
-                    for column in columns_values:
-                        if column.count(self.star_string) == self.height:
+                    for column, flip in zip(columns_values, columns_values_flipped):
+                        if column.count(self.star_string) == self.height and all(flip):
                             sum_player_dict[name] -= 10
 
         check_stars_in_line()
 
         return sum_player_dict
 
-    def flip_card_on_field(self, player, position: tuple):
+    def flip_card_on_field(self, player: Player, position: tuple):
         def flip_card_on_field_helper(player, position: tuple):
             for dic in self.field_hidden:
                 for name, array in dic.items():
@@ -102,7 +108,7 @@ class GameField:
             print(f"Card flipped at position {position}")
 
         while not flipped:
-            print(f"Card already flipped at position {position}!")
+            print(f"Card already flipped at position {position} or invalid input!")
             new_position = input(f"Enter new position: (x,y):")
             new_position = eval(new_position)
             flipped = flip_card_on_field_helper(player, new_position)
@@ -120,7 +126,12 @@ class GameField:
                                 card_on_field = entry[0]
                                 entry[0] = player.card_on_hand
                                 player.card_on_hand = None
-                                player.card_on_hand = card_on_field
+
+                                try:
+                                    player.card_on_hand = eval(card_on_field)
+                                except Exception:
+                                    player.card_on_hand = card_on_field
+
                                 entry[2] = True
                                 return True
 
@@ -139,7 +150,6 @@ class GameField:
                 for name, array in dic.items():
                     values = [entry[0] for entry in array]
                     rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
-                    columns_values = list(zip(*rows_values))
 
                     # Set values of row to 0 if all values are the same
                     for i, row in enumerate(rows_values):
@@ -151,7 +161,6 @@ class GameField:
 
                         for key, value in row_counts.items():
                             if value == 3 and count_deleted == 1 or value == 4 and key != self.star_string:
-                                print("bin drin")
                                 for entry in array:
                                     if entry[1][0] == i and entry[0] != self.star_string:
                                         entry[0] = "-"
@@ -196,7 +205,6 @@ class GameField:
                 for name, array in dic.items():
                     values = [entry[0] for entry in array]
                     rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
-                    columns_values = list(zip(*rows_values))
 
                     # Set values of row to 0 if all values are the same
                     for i, row in enumerate(rows_values):
@@ -229,11 +237,21 @@ class GameField:
 
         self.check_full_line()
 
+    def check_end(self):
+        for dic in self.field_hidden:
+            for name, array in dic.items():
+                check_end_list = []
+                for entry in array:
+                    check_end_list.append(entry[2])
+                if all(check_end_list):
+                    return True, name
+        return False, None
+
     def __str__(self):
         self.check_full_line()
         sum_player = self.calculate_sum_player(self.player_list, self.carddeck.value_string_mapping())
 
-        string = f""
+        string = f"\nDiscard stack: {self.carddeck.discard_stack[-1]}\n"
         for dic in self.field_hidden:
             for name, array in dic.items():
                 string += f"Name: {name}; Sum: {sum_player[name]}\n"
@@ -249,86 +267,6 @@ class GameField:
         return string
 
 
-class Carddeck:
-    def __init__(self):
-        self.cards = self.init_carddeck()
-        print("carddeck no discard deck: ", self.cards)
-        self.card_value_mapping = self.value_string_mapping()
-        self.discard_stack = [self.cards.pop(0)]
-
-        print("inital Carddeck: ", self.cards)
-        print("initial discard stack: ", self.discard_stack)
-
-    def init_carddeck(self):
-        cards = [card for card in range(-1, 13) for _ in range(7) if card != 0]
-        cards.extend([-2 for _ in range(3)])
-        cards.extend([0 for _ in range(11)])
-        star_string = "\u2666"
-        cards.extend([star_string for _ in range(15)])
-        random.shuffle(cards)
-
-        return cards
-
-    def value_string_mapping(self):
-        cards = list(set(self.cards))
-        mapping = {str(card): card for card in cards}
-
-        # add star
-        star_string = "\u2666"
-        mapping[star_string] = 0
-
-        # add special character that represents a row/column that is deleted (when a row/column is full with same values)
-        mapping["-"] = 0
-
-        return mapping
-
-
-class Player:
-    def __init__(self, name: str, carddeck: Carddeck, game_field_dimensions: tuple):
-        if type(name) == str:
-            self.name = name
-        else:
-            raise TypeError("Name must be a string")
-
-        self.cards = random.sample(carddeck.cards, game_field_dimensions[0] * game_field_dimensions[1])
-        self.carddeck_player = Carddeck
-        self.card_on_hand = None
-
-    def flip_card(self, position: tuple):
-        return position
-
-    def pull_card_from_discard_stack(self, carddeck: Carddeck):
-        if len(carddeck.discard_stack) > 0:
-            if self.card_on_hand is None:
-                # get last card from discard stack
-                card_on_hand = carddeck.discard_stack.pop()
-                self.card_on_hand = card_on_hand
-            else:
-                raise ValueError("Player already has a card on hand! Cannot have more than one card on hand!")
-        else:
-            raise ValueError("Discard stack is empty! Cannot pull card from empty discard stack!")
-
-    def pull_card_from_deck(self, carddeck: Carddeck):
-        card_on_hand = carddeck.cards[0]
-        carddeck.cards.remove(card_on_hand)
-        self.card_on_hand = card_on_hand
-        return card_on_hand
-
-    def put_card_on_discard_stack(self, carddeck: Carddeck):
-        if self.card_on_hand is not None:
-            if self.card_on_hand.isdigit():
-                carddeck.discard_stack.append(int(self.card_on_hand))
-                self.card_on_hand = None
-            else:
-                carddeck.discard_stack.append(self.card_on_hand)
-                self.card_on_hand = None
-        else:
-            raise ValueError("Player has no card on hand! Cannot put card on discard stack!")
-
-    def __str__(self):
-        return f"Name: {self.name}\nCards: {self.cards}\nCard on hand: {self.card_on_hand}\n"
-
-
 if __name__ == "__main__":
     C = Carddeck()
 
@@ -338,15 +276,10 @@ if __name__ == "__main__":
     G = GameField(4, 3, [S, A], C)
     star = G.star_string
 
-    S.pull_card_from_discard_stack(C)
-    print("first pull from carddeck:")
-    print("card on hand:", S.card_on_hand)
-    print(f"Discard Stack after pull: {C.discard_stack}")
-    G.change_card_with_card_on_hand(S, (0, 0))
-    print("Field after change")
-    print(G)
-    print(f"Discard Stack after change: {C.discard_stack}")
-    print(f"Card on hand after change:{S.card_on_hand}")
-    S.put_card_on_discard_stack(C)
-    print(f"Discard Stack after put: {C.discard_stack}")
-    print(f"Card on hand after put:{S.card_on_hand}")
+    G._set_values(A, (0, 0), star)
+    G._set_values(A, (0, 1), star)
+    G._set_values(A, (0, 2), star)
+
+    G.flip_card_on_field(A, (0, 3))
+
+    print(G.field_hidden)

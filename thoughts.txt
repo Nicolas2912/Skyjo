@@ -84,3 +84,7 @@ Modelling:
 	How can I solve that?
 	=> Had to add check_full_line() to method "_set_values()"
 	In __str__ when I print the field I will call check_full_line()
+
+4. Player order is [a, b, c]. What if b ended the game? Everyone else has exactly one turn. How to handle that?
+
+
