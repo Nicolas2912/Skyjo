@@ -54,7 +54,6 @@ class GameField:
     def calculate_sum_player(self, players: list, card_value_mapping: dict):
         sum_player_dict = {}
         for player in players:
-            player_carddeck = player.carddeck_player
             for dic in self.field_hidden:
                 for name, tup in dic.items():
                     sum_player = 0
@@ -113,7 +112,7 @@ class GameField:
             new_position = eval(new_position)
             flipped = flip_card_on_field_helper(player, new_position)
 
-    def change_card_with_card_on_hand(self, player, position: tuple):
+    def change_card_with_card_on_hand(self, player: Player, position: tuple):
         if player.card_on_hand is None:
             print("No card on hand!")
             return False
@@ -226,7 +225,7 @@ class GameField:
         # check_rows_first()
         # check_columns_first()
 
-    def _set_values(self, player, position: tuple, value):
+    def _set_values(self, player: Player, position: tuple, value):
         for dic in self.field_hidden:
             for name, array in dic.items():
                 if name == player.name:
@@ -246,6 +245,10 @@ class GameField:
                 if all(check_end_list):
                     return True, name
         return False, None
+
+    def reset(self):
+        self.__init__(self.length, self.height, self.player_list, self.carddeck)
+
 
     def __str__(self):
         self.check_full_line()
@@ -276,6 +279,8 @@ if __name__ == "__main__":
     G = GameField(4, 3, [S, A], C)
     star = G.star_string
 
+    print(G)
+
     G._set_values(A, (0, 0), star)
     G._set_values(A, (0, 1), star)
     G._set_values(A, (0, 2), star)
@@ -283,3 +288,7 @@ if __name__ == "__main__":
     G.flip_card_on_field(A, (0, 3))
 
     print(G.field_hidden)
+
+    G.reset()
+
+    print(G)
