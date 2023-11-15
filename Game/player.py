@@ -13,7 +13,6 @@ class Player:
             raise TypeError("Name must be a string")
 
         self.cards = random.sample(carddeck.cards, game_field_dimensions[0] * game_field_dimensions[1])
-        self.carddeck_player = Carddeck
         self.card_on_hand = None
 
         self.last_turn = False

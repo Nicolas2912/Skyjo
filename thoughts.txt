@@ -87,4 +87,27 @@ Modelling:
 
 4. Player order is [a, b, c]. What if b ended the game? Everyone else has exactly one turn. How to handle that?
 
+5. If star is pulled from the deck and changed with card on field player can chosse a value for this card but only for this round. If this value completes a row/column with all the same numbers the row/column will be deleted (set to "-") till the end.
+
+	And: If star is flipped on the field, the player can also choose a value for this card for this round. If this value completes a row/column with all the same numbers the row/column will be deleted (set to "-") till the end.
+
+    I will implement this later
+
+6. Which actions do I have?
+
+    a. Pull a card from the deck
+        a1. Change a card on the field with a card from the deck
+        a2. Put card on discard stack and turn around one card on your field
+    b. Pull a card from the discard stack
+        a1. Change a card on the field with a card from the deck
+        a2. Put card on discard stack and turn around one card on your field
+
+    => 4 different actions overall
+
+    How to model these actions?
+
+    action1 = ("pull deck", ("change", (0,0)))
+    action2 = ("pull deck", ("flip", (0,0)))
+    action3 = ("pull discard", ("change", (0,0)))
+    action4 = ("pull discard", ("flip", (0,0)))
 
