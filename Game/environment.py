@@ -10,6 +10,10 @@ class Environment:
         self.players = self.init_players(player_names)
         self.gamefield = self.init_gamefield()
 
+        self.state = []
+        for player in player_names:
+            self.state.append(self.get_state(self.players[player]))
+
     def init_carddeck(self):
         carddeck = Carddeck()
 
@@ -87,8 +91,6 @@ class Environment:
         else:
             return "running"
 
-
-
     def execute_action(self, player: Player, action: str, pos=None):
         # action1 = ("pull deck", ("change", (0, 0)))
         # action2 = ("pull deck", ("flip", (0, 0)))
@@ -99,7 +101,8 @@ class Environment:
         legal_actions = self.legal_actions()
 
         # legal positions ((0,0) - (2,3))
-        legal_positions = [(i, j) for i in range(3) for j in range(4)]
+        legal_positions = self.legal_positions()
+        legal_positions.append(None)
 
         # check if action is legal
         if action not in legal_actions:
@@ -111,20 +114,14 @@ class Environment:
 
         if action == "pull deck":
             self.pull_card_deck(player)
-            if action == "put discard":
-                player.put_card_on_discard_stack(self.carddeck)
-                self.flip_card_on_field(player, pos)
-            elif action == "change card":
-                self.change_card(player, pos)
-        elif action == "pull discard":
-            self.pull_card_discard_stack(player)
-            if action == "put discard":
-                player.put_card_on_discard_stack(self.carddeck)
-                self.flip_card_on_field(player, pos)
-            elif action == "change card":
-                self.change_card(player, pos)
+        if action == "pull discard":
+            self.pull_card_deck(player)
 
-        # TODO: hier weitermachen. Schauen wie ich das noch umsetzen kann
+        elif pos is not None and action == "put discard":
+            player.put_card_on_discard_stack(self.carddeck)
+            self.flip_card_on_field(player, pos)
+        elif pos is not None and action == "change card":
+            self.change_card(player, pos)
 
     def legal_actions(self):
         legal_actions = ["pull deck", "pull discard", "put discard", "change card"]
@@ -154,9 +151,13 @@ class Environment:
 if __name__ == "__main__":
     E = Environment(["Player1", "Player2"])
     state = E.get_state(E.players["Player1"])
-    print(state)
 
     E.execute_action(E.players["Player1"], "pull deck")
 
     state = E.get_state(E.players["Player1"])
     print(state)
+
+    E.execute_action(E.players["Player1"], "change card", (0, 0))
+    print(E.get_state(E.players["Player1"]))
+
+    # {player1: {player_hand: "1", field: [['1', (0,0), False], ...]}, player2: {player_hand: "2", field: [['2', (0,0), False], ...]}}
