@@ -140,25 +140,11 @@ class Game:
             print(f"Your card on hand: {self.players[player_name].card_on_hand}")
 
             action = get_valid_action(
-                "Choose action (put card on discard stack : pcds, change card with card on field : cc):",
-                ["pcds", "cc"]
+                "Choose action (change card with card on field : cc):",
+                ["cc"]
             )
 
-            if action == "pcds":
-                self.players[player_name].put_card_on_discard_stack(self.carddeck)
-
-                while True:
-                    try:
-                        position = eval(input("Choose position on field [(0,0) - (2,3)]:"))
-                        break  # Wenn die Eingabe erfolgreich evaluiert werden konnte, beende die Schleife
-                    except Exception as e:
-                        print(f"Error: {e}. Please enter a valid position.")
-
-                self.game_field.flip_card_on_field(self.players[player_name], position)
-
-                print(self.game_field)
-
-            elif action == "cc":
+            if action == "cc":
                 while True:
                     try:
                         position = eval(input("Choose position on field [(0,0) - (2,3)]:"))
