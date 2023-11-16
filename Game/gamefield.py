@@ -1,5 +1,5 @@
-from carddeck import Carddeck
-from player import Player
+from Game.carddeck import Carddeck
+from Game.player import Player
 
 import numpy as np
 import random
@@ -279,7 +279,7 @@ if __name__ == "__main__":
     G = GameField(4, 3, [S, A], C)
     star = G.star_string
 
-    print(G)
+    # print(G)
 
     G._set_values(A, (0, 0), star)
     G._set_values(A, (0, 1), star)
@@ -291,4 +291,4 @@ if __name__ == "__main__":
 
     G.reset()
 
-    print(G)
+    # print(G)
