@@ -1,4 +1,4 @@
-from carddeck import Carddeck
+from Game.carddeck import Carddeck
 
 import random
 
