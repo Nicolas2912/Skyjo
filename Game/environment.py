@@ -84,6 +84,7 @@ class Environment:
         pass
 
     def state_of_game(self):
+        # TODO: Her nochmal überprüfen, ob "beginning" richtig gesetzt wird
         player_field = self.gamefield.field_hidden
 
         end, name = self.gamefield.check_end()
