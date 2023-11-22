@@ -2,6 +2,17 @@ from Game.gamefield import GameField
 from Game.player import Player
 from Game.carddeck import Carddeck
 
+from agents.simple_reflex_agent import RandomAgent
+from Game.environment import Environment
+
+def set_up_game():
+    n = int(input("How many players?"))
+    player_names = []
+    for i in range(n):
+        player_names.append(input(f"Enter name of player {i + 1}:"))
+
+    return player_names
+
 
 class Game:
 
@@ -200,14 +211,62 @@ class Game:
         print("=" * 50)
 
 
+class GameAgent(Game, Environment):
+
+    def __init__(self, player_names: list, game_field_dimensions: tuple, carddeck: Carddeck):
+        Game.__init__(self, player_names, game_field_dimensions, carddeck)
+
+        Environment.__init__(self, player_names, carddeck, self.game_field)
+
+        self.agent = RandomAgent(player_names, carddeck, self.game_field)
+
+    def start(self):
+        print("Starting Skyjo!")
+
+        self.print_game_field()
+
+        # flip two cards for every player
+        for player_name, player in self.players.items():
+            print(f"Player {player_name} turn!\n")
+            if player_name == self.agent.agent_name:
+                self.agent.act()
+                self.print_game_field()
+
+            else:
+                while True:
+                    try:
+                        position1 = input(f"Player {player_name} flip two cards! Enter position one [(0,0) - (2,3)]:")
+                        position1 = eval(position1)
+                        break
+                    except Exception as e:
+                        print(f"Error: {e}. Please enter a valid position.")
+
+                self.execute_action(player, "flip card", position1)
+                self.print_game_field()
+                while True:
+                    try:
+                        position2 = input(f"Enter position two [(0,0) - (2,3)]:")
+                        position2 = eval(position2)
+                        break
+                    except Exception as e:
+                        print(f"Error: {e}. Please enter a valid position.")
+
+                self.execute_action(player, "flip card", position2)
+                self.print_game_field()
+
+
+    def run(self):
+        pass
+
+
 if __name__ == "__main__":
     carddeck = Carddeck()
 
-    n = int(input("How many players?"))
-    player_names = []
-    for i in range(n):
-        player_names.append(input(f"Enter name of player {i + 1}:"))
+    # player_names = set_up_game()
+    player_names = ["RandomAgent", "NIcolas"]
 
-    G = Game(player_names, (4, 3), carddeck)
+    # G1 = Game(player_names, (4, 3), carddeck)
+    # G1.start()
+
+    G = GameAgent(player_names, (4, 3), carddeck)
     G.start()
-    G.run()
