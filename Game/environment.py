@@ -7,17 +7,12 @@ import json
 
 class Environment:
 
-    def __init__(self, player_names: list):
-        self.carddeck = self.init_carddeck()
+    def __init__(self, player_names: list, carddeck: Carddeck, gamefield: GameField):
+        self.carddeck = carddeck
         self.players = self.init_players(player_names)
-        self.gamefield = self.init_gamefield()
+        self.gamefield = gamefield
 
         self.state = self.init_state()
-
-    def init_carddeck(self):
-        carddeck = Carddeck()
-
-        return carddeck
 
     def init_players(self, player_names: list):
         players = {}
@@ -26,11 +21,6 @@ class Environment:
             players[player_name] = player
 
         return players
-
-    def init_gamefield(self):
-        gamefield = GameField(4, 3, list(self.players.values()), self.carddeck)
-
-        return gamefield
 
     def init_state(self):
         state = {}
@@ -45,10 +35,10 @@ class Environment:
 
             state[player_name]["last_action"] = None
 
-        state["discard_stack"] = self.carddeck.discard_stack
+            # states of game: beginning, running, finished
+            state[player_name]["state_of_game"] = self.state_of_game(player_name)
 
-        # states of game: beginning, running, finished
-        state["state_of_game"] = self.state_of_game()
+        state["discard_stack"] = self.carddeck.discard_stack
 
         return state
 
@@ -59,47 +49,28 @@ class Environment:
                 if name == player.name:
                     return field
 
-
-
-    def start(self, player_pos_dict: dict):
-        # player_pos_dict = {"Player1": [(0,0), (0,1)], "Player2": [(0,2), (0,3)]}
-        # key is Player object, value is list of positions
-
-        # # check valid positions
-        # legal_positions = self.legal_positions()
-        # for player, positions in player_pos_dict.items():
-        #     for position in positions:
-        #         if position not in legal_positions:
-        #             raise ValueError("Position is not legal!")
-        #
-        # # check if every player has two positions
-        # for player, positions in player_pos_dict.items():
-        #     if len(positions) != 2:
-        #         raise ValueError("Player must have two positions for beginning!")
-        #
-        # # flip two cards for every player
-        # for player, positions in player_pos_dict.items():
-        #     for position in positions:
-        #         self.gamefield.flip_card_on_field(player, position)
-        pass
-
-    def state_of_game(self):
-        # TODO: Her nochmal überprüfen, ob "beginning" richtig gesetzt wird
+    def state_of_game(self, player_name: str):
         player_field = self.gamefield.field_hidden
 
         end, name = self.gamefield.check_end()
 
-        if end:
+        if end and name == player_name:
             return "finished"
 
-        flipped_cards = []
+        # check if every player has two cards flipped
+        flipped_cards = {}
         for dic in player_field:
             for name, field in dic.items():
                 for entry in field:
-                    flipped_cards.append(entry[2])
+                    if name not in flipped_cards and name == player_name:
+                        flipped_cards[name] = []
+                        flipped_cards[name].append(entry[2])
+                    elif name == player_name:
+                        flipped_cards[name].append(entry[2])
 
-        if not any(flipped_cards):
-            return "beginning"
+        for name, flipped in flipped_cards.items():
+            if name == player_name and flipped_cards[name].count(True) < 2:
+                return "beginning"
 
         else:
             return "running"
@@ -111,26 +82,31 @@ class Environment:
         # action4 = ("pull discard", ("flip", (0, 0)))
 
         # list of allowed actions:
-        legal_actions = self.legal_actions()
+        all_actions = self.all_actions()
 
-        # check lega actions
+        # check legal actions
         last_action = self.state[player.name]["last_action"]
-        if last_action in ["change card", "put discard", None] and action not in ["pull deck", "pull discard"]:
-            raise ValueError("Action is not legal!")
-        elif last_action in ["pull deck", "pull discard"] and action not in ["change card", "put discard"]:
+        legal_actions = self.legal_actions(last_action)
+
+        # check if action is legal
+        if action not in legal_actions:
+            print(action)
             raise ValueError("Action is not legal!")
 
         # legal positions ((0,0) - (2,3))
         legal_positions = self.legal_positions()
-        legal_positions.append(None)
-
-        # check if action is legal
-        if action not in legal_actions:
-            raise ValueError("Action is not legal!")
 
         # check if position is legal
         if pos not in legal_positions:
             raise ValueError("Position is not legal!")
+        
+        if action == "flip card":
+            # I need this just for the beginning where I flip two cards
+            self.flip_card_on_field(player, pos)
+
+            # update self.state
+            self.state[player.name]["field"] = self.reformat_field_hidden(player)
+            self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
 
         if action == "pull deck":
             self.pull_card_deck(player)
@@ -139,6 +115,7 @@ class Environment:
             self.state[player.name]["player_hand"] = player.card_on_hand
             self.state[player.name]["field"] = self.reformat_field_hidden(player)
             self.state[player.name]["last_action"] = action
+            self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
 
         if action == "pull discard":
             self.pull_card_discard_stack(player)
@@ -147,6 +124,7 @@ class Environment:
             self.state[player.name]["player_hand"] = player.card_on_hand
             self.state[player.name]["field"] = self.reformat_field_hidden(player)
             self.state[player.name]["last_action"] = action
+            self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
 
         elif pos is not None and action == "put discard":
             player.put_card_on_discard_stack(self.carddeck)
@@ -156,6 +134,7 @@ class Environment:
             self.state[player.name]["player_hand"] = player.card_on_hand
             self.state[player.name]["field"] = self.reformat_field_hidden(player)
             self.state[player.name]["last_action"] = action
+            self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
 
         elif pos is not None and action == "change card":
             self.change_card(player, pos)
@@ -164,9 +143,22 @@ class Environment:
             self.state[player.name]["player_hand"] = player.card_on_hand
             self.state[player.name]["field"] = self.reformat_field_hidden(player)
             self.state[player.name]["last_action"] = action
+            self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
 
-    def legal_actions(self):
-        legal_actions = ["pull deck", "pull discard", "put discard", "change card"]
+    def all_actions(self) -> list:
+        all_actions = ["pull deck", "pull discard", "put discard", "change card", "flip card"]
+        return all_actions
+
+    def legal_actions(self, last_action: str) -> list:
+        if last_action in ["change card", "put discard", "flip card"]:
+            legal_actions = ["pull deck", "pull discard"]
+        elif last_action in ["pull deck", "pull discard"]:
+            legal_actions = ["change card", "put discard"]
+        elif last_action is None:
+            legal_actions = ["flip card"]
+        else:
+            raise ValueError("Last action is not valid!")
+
         return legal_actions
 
     def legal_positions(self):
@@ -189,20 +181,30 @@ class Environment:
     def reset(self):
         self.gamefield.reset()
 
+    def print_game_field(self):
+        print(self.gamefield)
+
 
 if __name__ == "__main__":
     E = Environment(["Player1", "Player2"])
-    state = E.state
+    # state = E.state
+
+    print(E.state_of_game("Player1"))
 
     E.execute_action(E.players["Player1"], "pull deck")
+    E.execute_action(E.players["Player1"], "put discard", (0, 0))
+    E.execute_action(E.players["Player1"], "pull deck")
+    # E.execute_action(E.players["Player1"], "change card", (0, 1))
 
-    state = E.state
-    print(state)
+    print(E.state)
+
+    # state = E.state
+    # print(state)
     # print(state.keys())
     # print(state.values())
     # print(state["Player1"])
 
-    E.execute_action(E.players["Player1"], "put discard", (0, 0))
+    # E.execute_action(E.players["Player1"], "put discard", (0, 0))
     # print(E.get_state())
 
     # state:
