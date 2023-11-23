@@ -2,9 +2,6 @@ from Game.carddeck import Carddeck
 from Game.player import Player
 
 import numpy as np
-import random
-
-random.seed(42)
 
 
 class GameField:
@@ -249,12 +246,15 @@ class GameField:
     def reset(self):
         self.__init__(self.length, self.height, self.player_list, self.carddeck)
 
-
     def __str__(self):
         self.check_full_line()
         sum_player = self.calculate_sum_player(self.player_list, self.carddeck.value_string_mapping())
 
-        string = f"\nDiscard stack: {self.carddeck.discard_stack[-1]}\n"
+        if len(self.carddeck.discard_stack) == 0:
+            string = f"\nDiscard stack: []\n"
+        else:
+            string = f"\nDiscard stack: {self.carddeck.discard_stack[-1]}\n"
+
         for dic in self.field_hidden:
             for name, array in dic.items():
                 string += f"Name: {name}; Sum: {sum_player[name]}\n"
