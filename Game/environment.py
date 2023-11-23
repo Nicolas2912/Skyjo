@@ -76,17 +76,10 @@ class Environment:
             return "running"
 
     def execute_action(self, player: Player, action: str, pos=None):
-        # action1 = ("pull deck", ("change", (0, 0)))
-        # action2 = ("pull deck", ("flip", (0, 0)))
-        # action3 = ("pull discard", ("change", (0, 0)))
-        # action4 = ("pull discard", ("flip", (0, 0)))
-
-        # list of allowed actions:
-        all_actions = self.all_actions()
 
         # check legal actions
         last_action = self.state[player.name]["last_action"]
-        legal_actions = self.legal_actions(last_action)
+        legal_actions = self.legal_actions(last_action, player.name)
 
         # check if action is legal
         if action not in legal_actions:
@@ -94,12 +87,12 @@ class Environment:
             raise ValueError("Action is not legal!")
 
         # legal positions ((0,0) - (2,3))
-        legal_positions = self.legal_positions()
+        legal_positions = self.legal_positions(action, player.name)
 
         # check if position is legal
-        if pos not in legal_positions:
+        if pos is not None and pos not in legal_positions:
             raise ValueError("Position is not legal!")
-        
+
         if action == "flip card":
             # I need this just for the beginning where I flip two cards
             self.flip_card_on_field(player, pos)
@@ -107,6 +100,7 @@ class Environment:
             # update self.state
             self.state[player.name]["field"] = self.reformat_field_hidden(player)
             self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
+            self.state[player.name]["last_action"] = action
 
         if action == "pull deck":
             self.pull_card_deck(player)
@@ -149,8 +143,24 @@ class Environment:
         all_actions = ["pull deck", "pull discard", "put discard", "change card", "flip card"]
         return all_actions
 
-    def legal_actions(self, last_action: str) -> list:
-        if last_action in ["change card", "put discard", "flip card"]:
+    def all_positions(self) -> list:
+        all_positions = [(i, j) for i in range(self.gamefield.height) for j in range(self.gamefield.length)]
+        return all_positions
+
+    def _count_flipped_cards(self, player_name):
+        flipped_cards = []
+        for entry in self.state[player_name]["field"]:
+            flipped_cards.append(entry[2])
+
+        return flipped_cards.count(True)
+
+    def legal_actions(self, last_action: str, player_name) -> list:
+        # check how many cards are flipped
+        flipped_cards = self._count_flipped_cards(player_name)
+
+        if last_action == "flip card" and flipped_cards < 2:
+            legal_actions = ["flip card"]
+        elif last_action in ["change card", "put discard", "flip card"] and flipped_cards >= 2:
             legal_actions = ["pull deck", "pull discard"]
         elif last_action in ["pull deck", "pull discard"]:
             legal_actions = ["change card", "put discard"]
@@ -161,8 +171,16 @@ class Environment:
 
         return legal_actions
 
-    def legal_positions(self):
-        legal_positions = [(i, j) for i in range(3) for j in range(4)]
+    def legal_positions(self, action: str = None, player_name: str = None):
+        legal_positions = self.all_positions()
+
+        if action == "put discard":
+            # just get the positions where card is not flipped (False)
+            legal_positions = []
+            for entry in self.state[player_name]["field"]:
+                if not entry[2]:
+                    legal_positions.append(entry[1])
+
         return legal_positions
 
     def flip_card_on_field(self, player: Player, card_position: tuple):
@@ -186,17 +204,26 @@ class Environment:
 
 
 if __name__ == "__main__":
-    E = Environment(["Player1", "Player2"])
-    # state = E.state
+    carddeck = Carddeck()
 
-    print(E.state_of_game("Player1"))
+    player1 = Player("Player1", carddeck, (4, 3))
+    player2 = Player("Player2", carddeck, (4, 3))
+    gamefield = GameField(4, 3, [player1, player2], carddeck)
+    E = Environment(["Player1", "Player2"], carddeck, gamefield)
+
+    E.execute_action(E.players["Player1"], "flip card", (0, 0))
+    E.execute_action(E.players["Player1"], "flip card", (0, 1))
 
     E.execute_action(E.players["Player1"], "pull deck")
-    E.execute_action(E.players["Player1"], "put discard", (0, 0))
-    E.execute_action(E.players["Player1"], "pull deck")
+    E.execute_action(E.players["Player1"], "put discard")
+
+    all_pos = E.all_positions()
+    print(all_pos)
+    # E.execute_action(E.players["Player1"], "put discard", (0, 0))
+
     # E.execute_action(E.players["Player1"], "change card", (0, 1))
 
-    print(E.state)
+    # print(E.state)
 
     # state = E.state
     # print(state)
