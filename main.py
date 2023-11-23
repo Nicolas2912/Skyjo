@@ -5,6 +5,12 @@ from Game.carddeck import Carddeck
 from agents.simple_reflex_agent import RandomAgent
 from Game.environment import Environment
 
+import matplotlib.pyplot as plt
+
+import random, time
+
+# random.seed(10)
+
 
 def set_up_game():
     n = int(input("How many players?"))
@@ -277,6 +283,9 @@ class GameAgent(Game, Environment):
 
         if player_name == self.agent.agent_name:
             self.agent.act()
+            print(f"State of game after first action: {self.state[self.agent.agent_name]['state_of_game']}")
+            self.agent.act()
+            print(f"State of game after second action: {self.state[self.agent.agent_name]['state_of_game']}")
             self.print_game_field()
         else:
             raise ValueError("Player name is not agent name!")
@@ -328,15 +337,61 @@ class GameAgent(Game, Environment):
 
         print("=" * 50)
 
+    def run_agent_alone(self):
+        n = random.randint(0, 10000)
+        random.seed(None)
+        print("Starting Skyjo!")
+
+        self.agent.act()
+        self.print_game_field()
+
+        player_name = self.agent.agent_name
+
+        while not self.end:
+            self.player_turn_agent(player_name)
+            end, name = self.game_field.check_end()
+            if end:
+                self.end = True
+
+        print("Game ended!")
+
+        # calculate winner
+        card_sum = self.game_field.calculate_sum_player(list(self.players.values()), self.card_value_mapping)
+
+        result = card_sum[self.agent.agent_name]
+
+        print("=" * 50)
+
+        print("result:", result)
+
+        return result
+
+    def simulate_agent_games(self, n: int):
+        x = [i + 1 for i in range(n)]
+        y = []
+
+        for i in range(n):
+            self.start()
+            y.append(self.run_agent_alone())
+
+        plt.plot(x, y)
+        plt.grid()
+        plt.xlabel("Game Run")
+        plt.ylabel("Sum of cards")
+        plt.title("Agent performance")
+        plt.show()
+
 
 if __name__ == "__main__":
     carddeck = Carddeck()
 
     # player_names = set_up_game()
-    player_names = ["RandomAgent", "NIcolas"]
+    player_names = ["RandomAgent"]
 
     # G1 = Game(player_names, (4, 3), carddeck)
     # G1.start()
 
     G = GameAgent(player_names, (4, 3), carddeck)
-    G.start()
+    # G.start()
+    # G.run_agent_alone()
+    G.simulate_agent_games(3)
