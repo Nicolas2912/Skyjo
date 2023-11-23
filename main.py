@@ -5,6 +5,7 @@ from Game.carddeck import Carddeck
 from agents.simple_reflex_agent import RandomAgent
 from Game.environment import Environment
 
+
 def set_up_game():
     n = int(input("How many players?"))
     player_names = []
@@ -254,9 +255,78 @@ class GameAgent(Game, Environment):
                 self.execute_action(player, "flip card", position2)
                 self.print_game_field()
 
+        card_sum = self.game_field.calculate_sum_player(list(self.players.values()), self.card_value_mapping)
+
+        # sort card_sum dictionary by value
+        card_sum = {k: v for k, v in sorted(card_sum.items(), key=lambda item: item[1])}
+
+        first_player = list(card_sum.keys())[0]
+        print(f"Player {first_player} starts!")
+
+        # create player turn order
+        self.player_turn_order.append(first_player)
+        for player in self.players.values():
+            if player.name != first_player:
+                self.player_turn_order.append(player.name)
+
+        print(f"Player turn order: {self.player_turn_order}\n")
+        print("-" * 50)
+
+    def player_turn_agent(self, player_name):
+        print(f"Player {player_name} turn!")
+
+        if player_name == self.agent.agent_name:
+            self.agent.act()
+            self.print_game_field()
+        else:
+            raise ValueError("Player name is not agent name!")
 
     def run(self):
-        pass
+        end_player = False
+        end = False
+
+        while not self.end:
+            for i, player_name in enumerate(self.player_turn_order):
+                if player_name == self.agent.agent_name:
+                    self.player_turn_agent(player_name)
+                else:
+                    self.player_turn(player_name)
+                    end, name = self.game_field.check_end()
+
+                    if end and name in self.player_turn_order:
+                        print(f"Player {name} ended the game. Everyone else has one more turn!")
+                        self.player_turn_order.remove(name.strip())
+                        end_player = True
+                        break
+
+            if end_player:
+                for i, player_name in enumerate(self.player_turn_order):
+                    if player_name == self.agent.agent_name:
+                        self.player_turn_agent(player_name)
+                    else:
+                        self.player_turn(player_name)
+
+                    end, name = self.game_field.check_end()
+
+            if end and end_player:
+                self.end = True
+                self.flip_all_cards()
+                print("Final board:\n", self.game_field)
+                break
+
+        print("Game ended!")
+
+        # calculate winner
+        card_sum = self.game_field.calculate_sum_player(list(self.players.values()), self.card_value_mapping)
+        # sort card_sum dictionary by value
+        card_sum = {k: v for k, v in sorted(card_sum.items(), key=lambda item: item[1])}
+        print(f"The winner is: {list(card_sum.keys())[0]}, Sum: {list(card_sum.values())[0]}")
+
+        # output of the other places
+        for i, player_name in enumerate(list(card_sum.keys())[1:]):
+            print(f"{i + 2}. place: {player_name}, Sum: {list(card_sum.values())[i + 1]}")
+
+        print("=" * 50)
 
 
 if __name__ == "__main__":
