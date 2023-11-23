@@ -1,8 +1,10 @@
 from Game.carddeck import Carddeck
+# from seed import random_seed
 
-import random
+import random, time
 
-random.seed(42)
+# random.seed(time.process_time())
+
 
 
 class Player:
@@ -16,6 +18,7 @@ class Player:
         self.card_on_hand = None
 
         self.last_turn = False
+
 
     def flip_card(self, position: tuple):
         return position
