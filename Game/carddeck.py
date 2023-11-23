@@ -1,12 +1,19 @@
-import random
+# from seed import random_seed
 
-random.seed(42)
+import random, time
+
+# random.seed(time.process_time())
+
+
+
 
 class Carddeck:
     def __init__(self):
         self.cards = self.init_carddeck()
         self.card_value_mapping = self.value_string_mapping()
         self.discard_stack = [self.cards.pop(0)]
+
+        print(f"Carddeck random seed: {random.getstate()}")
 
     def init_carddeck(self):
         cards = [card for card in range(-1, 13) for _ in range(7) if card != 0]
@@ -30,3 +37,8 @@ class Carddeck:
         mapping["-"] = 0
 
         return mapping
+
+
+if __name__ == "__main__":
+    c = Carddeck()
+    print(c.cards)
