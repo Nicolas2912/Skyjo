@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 
 import random, time
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
 from tqdm import tqdm
 
 
@@ -440,7 +443,7 @@ class Simulation:
         print(f"Average time per run: {time_average} seconds")
 
         # plot histogram
-        n, bins, _ = plt.hist(results, bins=20, label=f"{G.agent.agent_name} results")
+        n, bins, _ = plt.hist(results, bins=50, label=f"{G.agent.agent_name} results")
 
         mean, std = np.mean(results), np.std(results)
 
@@ -460,6 +463,56 @@ class Simulation:
         plt.title("Agent performance")
         plt.show()
 
+    def simulate_single_game(self):
+        carddeck = Carddeck()
+        player_names = ["RandomAgent"]
+        game_field_dimensions = (4, 3)
+        G = GameAgent(player_names, game_field_dimensions, carddeck)
+
+        start = time.time()
+        G.start(False)
+        result = G.run_agent_alone(False)
+        run_time = time.time() - start
+
+        # print(f"Game finished with result: {result} in {run_time:.2f} seconds")
+
+        return result, run_time
+
+    def simulate_agent_games_parallel(self, n):
+        results = []
+        run_times = []
+
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self.simulate_single_game) for _ in tqdm(range(n))]
+
+            for future in tqdm(as_completed(futures), total=n):
+                result, run_time = future.result()
+                results.append(result)
+                run_times.append(run_time)
+
+            # plot histogram
+            n, bins, _ = plt.hist(results, bins=50, label=f"Agent results")
+
+            mean, std = np.mean(results), np.std(results)
+
+            print(f"Mean: {mean:.2f}, Std: {std:.2f}")
+
+            # plot pdf
+            x = np.linspace(min(results), max(results), 1000)
+            p = norm.pdf(x, mean, std)
+            p *= n.max() / p.max()
+            plt.plot(x, p, 'k', linewidth=2)
+
+            plt.plot(x, p, 'k', linewidth=2, label='Normal Distribution')
+
+            plt.xlabel("Sum of cards")
+            plt.ylabel("Frequency")
+            plt.title("Agent performance")
+            plt.show()
+
+        return results, run_times
+
+
 if __name__ == "__main__":
     carddeck = Carddeck()
 
@@ -476,4 +529,5 @@ if __name__ == "__main__":
     # G.simulate_agent_games(2)
 
     S = Simulation()
-    S.simulate_agent_games(1000000, False)
+    S.simulate_agent_games_parallel(100000)
+    # S.simulate_agent_games(1000000, False)
