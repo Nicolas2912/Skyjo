@@ -25,7 +25,7 @@ class RandomAgent(Environment):
         self.state = self.init_state()
         # self.action_space = self.init_action_space()
 
-    def act(self):
+    def act(self, output: bool = True):
 
         if self.state[self.agent_name]["state_of_game"] == "beginning":
             # choose random positions
@@ -33,9 +33,10 @@ class RandomAgent(Environment):
             position1, position2 = random.sample(all_positions, 2)
 
             action = "flip card"
-            self.execute_action(self.agent_player, action, position1)
-            self.execute_action(self.agent_player, action, position2)
-            print(f"Agent {self.agent_name} flipped cards at position {position1} and {position2}")
+            self.execute_action(self.agent_player, action, position1, output)
+            self.execute_action(self.agent_player, action, position2, output)
+            if output:
+                print(f"Agent {self.agent_name} flipped cards at position {position1} and {position2}")
             self.state[self.agent_name]["last_action"] = action
 
             self.state[self.agent_name]["state_of_game"] = "running"
@@ -50,22 +51,26 @@ class RandomAgent(Environment):
             legal_positions = self.legal_positions(action, self.agent_name)
 
             if action in ["pull deck", "pull discard"]:
-                self.execute_action(self.agent_player, action)
-                print(f"Agent {self.agent_name} executed action {action}")
-                print(f"Agent {self.agent_name} card on hand: {self.agent_player.card_on_hand}")
+                self.execute_action(self.agent_player, action, None, output)
+                if output:
+                    print(f"Agent {self.agent_name} executed action {action}")
+                    print(f"Agent {self.agent_name} card on hand: {self.agent_player.card_on_hand}")
 
             if action == "put discard":
                 position = random.choice(legal_positions)
-                self.execute_action(self.agent_player, action, position)
-                print(f"Agent {self.agent_name} executed action {action} at position {position}")
+                self.execute_action(self.agent_player, action, position, output)
+                if output:
+                    print(f"Agent {self.agent_name} executed action {action} at position {position}")
 
             elif action == "change card":
                 position = random.choice(legal_positions)
-                self.execute_action(self.agent_player, action, position)
-                print(f"Agent {self.agent_name} executed action {action} and flipped at position {position}")
+                self.execute_action(self.agent_player, action, position, output)
+                if output:
+                    print(f"Agent {self.agent_name} executed action {action} and flipped at position {position}")
 
         elif self.state[self.agent_name]["state_of_game"] == "finished":
-            print(f"Agent {self.agent_name} has finished the game!")
+            if output:
+                print(f"Agent {self.agent_name} has finished the game!")
 
         else:
             raise ValueError("State of game is not valid!")
