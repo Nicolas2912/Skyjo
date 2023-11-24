@@ -75,7 +75,7 @@ class Environment:
         else:
             return "running"
 
-    def execute_action(self, player: Player, action: str, pos=None):
+    def execute_action(self, player: Player, action: str, pos=None, output: bool = True):
 
         # check legal actions
         last_action = self.state[player.name]["last_action"]
@@ -95,7 +95,7 @@ class Environment:
 
         if action == "flip card":
             # I need this just for the beginning where I flip two cards
-            self.flip_card_on_field(player, pos)
+            self.flip_card_on_field(player, pos, output)
 
             # update self.state
             self.state[player.name]["field"] = self.reformat_field_hidden(player)
@@ -122,7 +122,7 @@ class Environment:
 
         elif pos is not None and action == "put discard":
             player.put_card_on_discard_stack(self.carddeck)
-            self.flip_card_on_field(player, pos)
+            self.flip_card_on_field(player, pos, output)
 
             # update self.state
             self.state[player.name]["player_hand"] = player.card_on_hand
@@ -183,8 +183,8 @@ class Environment:
 
         return legal_positions
 
-    def flip_card_on_field(self, player: Player, card_position: tuple):
-        self.gamefield.flip_card_on_field(player, card_position)
+    def flip_card_on_field(self, player: Player, card_position: tuple, output: bool = True):
+        self.gamefield.flip_card_on_field(player, card_position, output)
 
     def pull_card_discard_stack(self, player: Player):
         player.pull_card_from_discard_stack(self.carddeck)
