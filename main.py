@@ -1,13 +1,19 @@
+import numpy as np
+
 from Game.gamefield import GameField
 from Game.player import Player
 from Game.carddeck import Carddeck
 
 from agents.simple_reflex_agent import RandomAgent
 from Game.environment import Environment
+from scipy.stats import norm
 
 import matplotlib.pyplot as plt
 
 import random, time
+
+from tqdm import tqdm
+
 
 # random.seed(10)
 
@@ -227,17 +233,21 @@ class GameAgent(Game, Environment):
 
         self.agent = RandomAgent(player_names, carddeck, self.game_field)
 
-    def start(self):
-        print("Starting Skyjo!")
+    def start(self, output: bool = True):
 
-        self.print_game_field()
+        if output:
+            print("Starting Skyjo!")
+
+            self.print_game_field()
 
         # flip two cards for every player
         for player_name, player in self.players.items():
-            print(f"Player {player_name} turn!\n")
+            if output:
+                print(f"Player {player_name} turn!\n")
             if player_name == self.agent.agent_name:
-                self.agent.act()
-                self.print_game_field()
+                self.agent.act(output)
+                if output:
+                    self.print_game_field()
 
             else:
                 while True:
@@ -248,8 +258,9 @@ class GameAgent(Game, Environment):
                     except Exception as e:
                         print(f"Error: {e}. Please enter a valid position.")
 
-                self.execute_action(player, "flip card", position1)
-                self.print_game_field()
+                self.execute_action(player, "flip card", position1, output)
+                if output:
+                    self.print_game_field()
                 while True:
                     try:
                         position2 = input(f"Enter position two [(0,0) - (2,3)]:")
@@ -258,8 +269,9 @@ class GameAgent(Game, Environment):
                     except Exception as e:
                         print(f"Error: {e}. Please enter a valid position.")
 
-                self.execute_action(player, "flip card", position2)
-                self.print_game_field()
+                self.execute_action(player, "flip card", position2, output)
+                if output:
+                    self.print_game_field()
 
         card_sum = self.game_field.calculate_sum_player(list(self.players.values()), self.card_value_mapping)
 
@@ -267,7 +279,8 @@ class GameAgent(Game, Environment):
         card_sum = {k: v for k, v in sorted(card_sum.items(), key=lambda item: item[1])}
 
         first_player = list(card_sum.keys())[0]
-        print(f"Player {first_player} starts!")
+        if output:
+            print(f"Player {first_player} starts!")
 
         # create player turn order
         self.player_turn_order.append(first_player)
@@ -275,18 +288,20 @@ class GameAgent(Game, Environment):
             if player.name != first_player:
                 self.player_turn_order.append(player.name)
 
-        print(f"Player turn order: {self.player_turn_order}\n")
-        print("-" * 50)
+        if output:
+            print(f"Player turn order: {self.player_turn_order}\n")
+            print("-" * 50)
 
-    def player_turn_agent(self, player_name):
-        print(f"Player {player_name} turn!")
+    def player_turn_agent(self, player_name, output: bool = True):
+        if output:
+            print(f"Player {player_name} turn!")
 
         if player_name == self.agent.agent_name:
-            self.agent.act()
-            print(f"State of game after first action: {self.state[self.agent.agent_name]['state_of_game']}")
-            self.agent.act()
-            print(f"State of game after second action: {self.state[self.agent.agent_name]['state_of_game']}")
-            self.print_game_field()
+            self.agent.act(output)
+            self.agent.act(output)
+            if output:
+                self.print_game_field()
+
         else:
             raise ValueError("Player name is not agent name!")
 
@@ -337,42 +352,41 @@ class GameAgent(Game, Environment):
 
         print("=" * 50)
 
-    def run_agent_alone(self):
+    def run_agent_alone(self, output: bool = True):
         n = random.randint(0, 10000)
         random.seed(None)
-        print("Starting Skyjo!")
 
-        self.agent.act()
-        self.print_game_field()
+        self.agent.act(output)
+        if output:
+            self.print_game_field()
 
         player_name = self.agent.agent_name
 
         while not self.end:
-            self.player_turn_agent(player_name)
+            self.player_turn_agent(player_name, output)
             end, name = self.game_field.check_end()
             if end:
                 self.end = True
-
-        print("Game ended!")
+        if output:
+            print("Game ended!")
 
         # calculate winner
         card_sum = self.game_field.calculate_sum_player(list(self.players.values()), self.card_value_mapping)
 
         result = card_sum[self.agent.agent_name]
-
-        print("=" * 50)
-
-        print("result:", result)
+        if output:
+            print("result:", result)
+            print("=" * 50)
 
         return result
 
-    def simulate_agent_games(self, n: int):
+    def simulate_agent_games(self, n: int, output: bool = True):
         x = [i + 1 for i in range(n)]
         y = []
 
         for i in range(n):
-            self.start()
-            y.append(self.run_agent_alone())
+            self.start(output)
+            y.append(self.run_agent_alone(output))
 
         plt.plot(x, y)
         plt.grid()
@@ -382,16 +396,84 @@ class GameAgent(Game, Environment):
         plt.show()
 
 
+class Simulation:
+
+    def __init__(self):
+        pass
+
+    def simulate_agent_games(self, n: int, output: bool = True):
+        results = []
+        run_time = []
+        start_simulation = time.time()
+
+        for _ in tqdm(range(n)):
+            carddeck = Carddeck()
+            player_names = ["RandomAgent"]
+            game_field_dimensions = (4, 3)
+            G = GameAgent(player_names, game_field_dimensions, carddeck)
+
+            start = time.time()
+            G.start(output)
+            results.append(G.run_agent_alone(output))
+            run_time.append(time.time() - start)
+
+        time_elapsed_simulation = time.time() - start_simulation
+
+        time_average = sum(run_time) / n
+
+        x = [i + 1 for i in range(n)]
+
+        average = sum(results) / n
+
+        # plt.plot(x, results, label=f"{G.agent.agent_name} results", marker="o", linestyle="")
+
+        # plot average
+        # plt.axhline(y=average, color="r", linestyle="-", label=f"Average: {average:.2f}")
+        # plt.grid()
+        # plt.xlabel("Game Run")
+        # plt.ylabel("Sum of cards")
+        # plt.title("Agent performance")
+        # plt.legend()
+        # plt.show()
+
+        print(f"Simulation finished in {time_elapsed_simulation:.2f} seconds")
+        print(f"Average time per run: {time_average} seconds")
+
+        # plot histogram
+        n, bins, _ = plt.hist(results, bins=20, label=f"{G.agent.agent_name} results")
+
+        mean, std = np.mean(results), np.std(results)
+
+        print(f"Mean: {mean:.2f}, Std: {std:.2f}")
+
+        # plot pdf
+        x = np.linspace(min(results), max(results), 1000)
+        p = norm.pdf(x, mean, std)
+        p *= n.max() / p.max()
+        plt.plot(x, p, 'k', linewidth=2)
+
+
+        plt.plot(x, p, 'k', linewidth=2, label='Normal Distribution')
+
+        plt.xlabel("Sum of cards")
+        plt.ylabel("Frequency")
+        plt.title("Agent performance")
+        plt.show()
+
 if __name__ == "__main__":
     carddeck = Carddeck()
 
     # player_names = set_up_game()
-    player_names = ["RandomAgent"]
+    player_names = ["Nicolas", "Jolan"]
 
     # G1 = Game(player_names, (4, 3), carddeck)
     # G1.start()
+    # G1.run()
 
-    G = GameAgent(player_names, (4, 3), carddeck)
+    # G = GameAgent(player_names, (4, 3), carddeck)
     # G.start()
     # G.run_agent_alone()
-    G.simulate_agent_games(3)
+    # G.simulate_agent_games(2)
+
+    S = Simulation()
+    S.simulate_agent_games(1000000, False)
