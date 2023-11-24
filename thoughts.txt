@@ -111,3 +111,7 @@ Modelling:
     action3 = ("pull discard", ("change", (0,0)))
     action4 = ("pull discard", ("flip", (0,0)))
 
+7. Problem with RandomAgent in method "simulate_agent_games".
+    => For every run the game uses the same agent. After run 1 game has finished and in the second run the game will use
+    that from the run before. I need to initiate a new agent for every run. How to do that?
+
