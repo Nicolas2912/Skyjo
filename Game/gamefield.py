@@ -85,7 +85,7 @@ class GameField:
 
         return sum_player_dict
 
-    def flip_card_on_field(self, player: Player, position: tuple):
+    def flip_card_on_field(self, player: Player, position: tuple, output: bool = True):
         def flip_card_on_field_helper(player, position: tuple):
             for dic in self.field_hidden:
                 for name, array in dic.items():
@@ -99,9 +99,9 @@ class GameField:
                                     return False
 
         flipped = flip_card_on_field_helper(player, position)
-
-        if flipped:
-            print(f"Card flipped at position {position}")
+        if output:
+            if flipped:
+                print(f"Card flipped at position {position}")
 
         while not flipped:
             print(f"Card already flipped at position {position} or invalid input!")
