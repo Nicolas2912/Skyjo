@@ -115,3 +115,12 @@ Modelling:
     => For every run the game uses the same agent. After run 1 game has finished and in the second run the game will use
     that from the run before. I need to initiate a new agent for every run. How to do that?
 
+8. What are some strategies for the SimpleReflexAgent?
+
+    a. At beginning. Just flip cards beside each other in order to maximize the chance to get full row/column.
+    b. If a card on discard stack is lower than one card on the field, pull card from discard stack and change it with the card on the field.
+    Else pull card from deck and check if the card one hand is lower than the card on the field. If yes, change it with the card on the field.
+    Else put card on discard stack and turn around one card on the field next to a card that is already flipped.
+    If card is same with a card on field that is flipped, put card next to it in order to get a row/column that will be then deleted if row/column is full.
+
+
