@@ -2,7 +2,7 @@
 
 import random, time
 
-# random.seed(time.process_time())
+random.seed(7)
 
 
 
