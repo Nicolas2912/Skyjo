@@ -3,6 +3,8 @@ from Game.player import Player
 
 import numpy as np
 
+from collections import Counter
+
 
 class GameField:
     def __init__(self, length: int, height: int, players: list, carddeck):
@@ -12,7 +14,9 @@ class GameField:
         self.field_visible = []
         self.star_string = "\u2666"
 
-        self.player_list = players
+        self.players_list = players
+
+        self.players_dict = {player.name: player for player in players}
 
         self.carddeck = carddeck
 
@@ -22,7 +26,7 @@ class GameField:
 
         # create a numpy array for every player; a temporary list is needed to store the arrays
         for player in players:
-            numpy_array_player_cards = np.array(player.cards).reshape((height, length))
+            numpy_array_player_cards = np.array(player.player_cards).reshape((height, length))
             self.field_temp.append({player.name: numpy_array_player_cards})
 
         self.field_hidden = self.make_field_hidden(self.field_temp, players)
@@ -50,7 +54,7 @@ class GameField:
 
     def calculate_sum_player(self, players: list, card_value_mapping: dict):
         sum_player_dict = {}
-        for player in players:
+        for _ in players:
             for dic in self.field_hidden:
                 for name, tup in dic.items():
                     sum_player = 0
@@ -94,6 +98,7 @@ class GameField:
                             if entry[1] == position:
                                 if not entry[2]:
                                     entry[2] = True
+                                    self.check_full_line()
                                     return True
                                 else:
                                     return False
@@ -129,98 +134,45 @@ class GameField:
                                     player.card_on_hand = card_on_field
 
                                 entry[2] = True
+                                self.check_full_line()
                                 return True
 
     def check_full_line(self):
-        def count_elements(row):
-            counts = {}
-            for element in row:
-                if element in counts:
-                    counts[element] += 1
-                else:
-                    counts[element] = 1
-            return counts
 
-        def check_rows_first():
-            for dic in self.field_hidden:
-                for name, array in dic.items():
-                    values = [entry[0] for entry in array]
-                    rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
+        # check if all cards in a column are the same (height = 3)
+        for dic in self.field_hidden:
+            for name, field in dic.items():
 
-                    # Set values of row to 0 if all values are the same
-                    for i, row in enumerate(rows_values):
-                        row_counts = count_elements(row)
-                        if "-" in list(row_counts.keys()):
-                            count_deleted = row_counts["-"]
-                        else:
-                            count_deleted = 0
+                field_transposed = sorted(field, key=lambda x: x[1][1])
 
-                        for key, value in row_counts.items():
-                            if value == 3 and count_deleted == 1 or value == 4 and key != self.star_string:
-                                for entry in array:
-                                    if entry[1][0] == i and entry[0] != self.star_string:
-                                        entry[0] = "-"
-                                        entry[2] = True
+                for column in field_transposed:
+                    column_values = [entry[0] for entry in field if entry[1][1] == column[1][1] and entry[2]]
 
-            for dic in self.field_hidden:
-                for name, array in dic.items():
-                    values = [entry[0] for entry in array]
-                    rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
-                    columns_values = list(zip(*rows_values))
+                    column_counts = Counter(column_values)
+                    column_counts_dict = dict(column_counts)
 
-                    # Set column values to 0 if all values are the same
-                    for i, column in enumerate(columns_values):
-                        column_counts = count_elements(column)
+                    if len(column_counts_dict.values()) == 1 and list(column_counts_dict.values())[0] == self.height:
+                        for entry in field:
+                            if entry[1][1] == column[1][1] and entry[2]:
+                                entry[0] = "-"
 
-                        for key, value in column_counts.items():
-                            if value == 3 and key != self.star_string:
-                                for entry in array:
-                                    if entry[1][1] == i and entry[0] != self.star_string:
-                                        entry[0] = "-"
-                                        entry[2] = True
+        # check if all cards in a row are the same (length = 4)
+        for dic in self.field_hidden:
+            for name, field in dic.items():
+                for row in field:
+                    row_values = [entry[0] for entry in field if entry[1][0] == row[1][0] and entry[2]]
+                    row_counts = Counter(row_values)
+                    row_counts_dict = dict(row_counts)
 
-        def check_columns_first():
-            for dic in self.field_hidden:
-                for name, array in dic.items():
-                    values = [entry[0] for entry in array]
-                    rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
-                    columns_values = list(zip(*rows_values))
-
-                    # Set column values to 0 if all values are the same
-                    for i, column in enumerate(columns_values):
-                        column_counts = count_elements(column)
-
-                        for key, value in column_counts.items():
-                            if value == 3 and key != self.star_string:
-                                for entry in array:
-                                    if entry[1][1] == i and entry[0] != self.star_string:
-                                        entry[0] = "-"
-                                        entry[2] = True
-
-            for dic in self.field_hidden:
-                for name, array in dic.items():
-                    values = [entry[0] for entry in array]
-                    rows_values = [values[i:i + self.length] for i in range(0, len(values), self.length)]
-
-                    # Set values of row to 0 if all values are the same
-                    for i, row in enumerate(rows_values):
-                        row_counts = count_elements(row)
-                        if "-" in list(row_counts.keys()):
-                            count_deleted = row_counts["-"]
-                        else:
-                            count_deleted = 0
-
-                        for key, value in row_counts.items():
-                            if value == 3 and count_deleted == 1 or value == 4 and key != self.star_string:
-                                for entry in array:
-                                    if entry[1][0] == i and entry[0] != self.star_string:
-                                        entry[0] = "-"
-                                        entry[2] = True
-
-        check_rows_first()
-        # check_columns_first()
-        # check_rows_first()
-        # check_columns_first()
+                    already_set = False
+                    if not already_set and len(row_counts_dict.values()) > 0:
+                        if (len(row_counts_dict.values()) == 1 and list(row_counts_dict.values())[
+                            0] == self.length) or (len(row_counts_dict.values()) == 2 and self.length - 1 in list(
+                            row_counts_dict.values())):
+                            for entry in field:
+                                if entry[1][0] == row[1][0] and entry[2]:
+                                    entry[0] = "-"
+                        already_set = True
 
     def _set_values(self, player: Player, position: tuple, value):
         for dic in self.field_hidden:
@@ -230,8 +182,11 @@ class GameField:
                         if entry[1] == position:
                             entry[0] = value
                             entry[2] = True
+                            break
+                break
+            break
 
-        self.check_full_line()
+        # self.check_full_line()
 
     def check_end(self):
         for dic in self.field_hidden:
@@ -244,11 +199,11 @@ class GameField:
         return False, None
 
     def reset(self):
-        self.__init__(self.length, self.height, self.player_list, self.carddeck)
+        self.__init__(self.length, self.height, self.players_list, self.carddeck)
 
     def __str__(self):
         self.check_full_line()
-        sum_player = self.calculate_sum_player(self.player_list, self.carddeck.value_string_mapping())
+        sum_player = self.calculate_sum_player(self.players_list, self.carddeck.value_string_mapping())
 
         if len(self.carddeck.discard_stack) == 0:
             string = f"\nDiscard stack: []\n"
@@ -273,22 +228,28 @@ class GameField:
 if __name__ == "__main__":
     C = Carddeck()
 
-    S = Player("Sven", C, (4, 3))
-    A = Player("Anna", C, (4, 3))
+    N = Player("Nicolas", C, (4, 3))
+    L = Player("Linus", C, (4, 3))
 
-    G = GameField(4, 3, [S, A], C)
+    G = GameField(4, 3, [N, L], C)
     star = G.star_string
 
     # print(G)
+    G.flip_card_on_field(N, (0, 0))
+    G._set_values(N, (1, 0), 0)
+    G._set_values(N, (2, 0), 0)
 
-    G._set_values(A, (0, 0), star)
-    G._set_values(A, (0, 1), star)
-    G._set_values(A, (0, 2), star)
+    G._set_values(N, (0, 3), 0)
+    G._set_values(N, (0, 2), 0)
+    G._set_values(N, (0, 1), 0)
 
-    G.flip_card_on_field(A, (0, 3))
+    # G._set_values(N, (1, 2), 9)
+    # G._set_values(A, (2, 2), 9)
 
-    print(G.field_hidden)
+    # G.flip_card_on_field(A, (0, 3))
 
-    G.reset()
+    print(G)
+
+    # G.reset()
 
     # print(G)
