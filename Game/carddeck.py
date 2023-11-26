@@ -1,4 +1,5 @@
 # from seed import random_seed
+from collections import Counter
 
 import random, time
 
@@ -13,7 +14,7 @@ class Carddeck:
         self.card_value_mapping = self.value_string_mapping()
         self.discard_stack = [self.cards.pop(0)]
 
-    def init_carddeck(self):
+    def init_carddeck(self) -> list:
         cards = [card for card in range(-1, 13) for _ in range(7) if card != 0]
         cards.extend([-2 for _ in range(3)])
         cards.extend([0 for _ in range(11)])
@@ -23,7 +24,7 @@ class Carddeck:
 
         return cards
 
-    def value_string_mapping(self):
+    def value_string_mapping(self) -> dict:
         cards = list(set(self.cards))
         mapping = {str(card): card for card in cards}
 
@@ -39,4 +40,7 @@ class Carddeck:
 
 if __name__ == "__main__":
     c = Carddeck()
-    print(c.cards)
+    cards_counter = Counter(c.cards)
+    cards_counter = sorted(cards_counter.items(), key=lambda x: x[1], reverse=False)
+    print(dict(cards_counter))
+    print(len(c.cards))
