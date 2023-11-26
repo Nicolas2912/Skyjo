@@ -24,7 +24,8 @@ def set_up_game():
     n = int(input("How many players?"))
     player_names = []
     for i in range(n):
-        player_names.append(input(f"Enter name of player {i + 1}:"))
+        pass
+        
 
     return player_names
 
@@ -99,7 +100,7 @@ class Game2:
 
     def turn_players(self, player_name):
 
-        if len(self.env.agents) == 0:
+        if len(self.env.players) > 0:
             print(f"Player {player_name} turn!")
 
             def get_valid_action(prompt, valid_actions):
@@ -291,19 +292,211 @@ class Game2:
                 f"There must be at least one player and one agent! \nPlayer: {self.env.players}\nAgent: {self.env.agents}")
 
     def turn_player_agent(self, player_name, output: bool = True):
-        pass
+        if len(self.env.agents) > 0 and len(self.env.players) > 0:
+
+            if player_name in self.env.players:
+                self.turn_players(player_name)
+
+            elif player_name in self.env.agents:
+
+                if output:
+                    print(f"Agent {player_name} turn!")
+
+                last_action = self.env.state[player_name]["last_action"]
+                legal_actions = self.env.legal_actions(last_action, player_name)
+
+                agent = self.env.agents[player_name]
+
+                # make first action
+                action = agent.choose_random_action(legal_actions, output)
+                self.env.execute_action(self.env.agents[player_name], action, None, output)
+
+                # make second action
+                legal_actions = self.env.legal_actions(action, player_name)
+                action = agent.choose_random_action(legal_actions, output)
+                legal_positions = self.env.legal_positions(action, player_name)
+                pos = agent.choose_random_position(legal_positions, output)
+                self.env.execute_action(self.env.agents[player_name], action, pos, output)
+
+                self.env.update_state(player_name, action)
+                if output:
+                    self.env.print_game_field()
 
     def run_player_agent(self):
-        pass
+        end_player = False
+        end = False
 
-    def start_agents(self):
-        pass
+        while not self.end:
 
-    def turn_agents(self):
-        pass
+            for i, player_name in enumerate(self.player_turn_order):
+                self.turn_player_agent(player_name)
+                end, name = self.env.gamefield.check_end()
+
+                if end and name in self.player_turn_order:
+                    print(f"Player {name} ended the game. Everyone else has one more turn!")
+                    self.player_turn_order.remove(name.strip())
+                    end_player = True
+                    break
+
+            if end_player:
+                for i, player_name in enumerate(self.player_turn_order):
+                    self.turn_player_agent(player_name)
+
+                    end, name = self.env.gamefield.check_end()
+
+            if end and end_player:
+                self.end = True
+                self.__flip_all_cards()
+                print("Final board:\n", self.env.gamefield)
+                break
+
+        print("Game ended!")
+
+        # calculate winner
+        card_sum = self.env.gamefield.calculate_sum_player(list(self.players_agents.values()),
+                                                           self.env.carddeck.card_value_mapping)
+        # sort card_sum dictionary by value
+        card_sum = {k: v for k, v in sorted(card_sum.items(), key=lambda item: item[1])}
+
+        print(f"The winner is: {list(card_sum.keys())[0]}, Sum: {list(card_sum.values())[0]}")
+
+        # output of the other places
+        for i, player_name in enumerate(list(card_sum.keys())[1:]):
+            print(f"{i + 2}. place: {player_name}, Sum: {list(card_sum.values())[i + 1]}")
+
+        print("=" * 50)
+
+        return card_sum
+
+    def start_agents(self, output: bool = True):
+        if len(self.env.agents) > 0 and len(self.env.players) == 0:
+
+            if output:
+                print("Starting Skyjo!")
+
+            for agent_name, agent in self.env.agents.items():
+                legal_positions = self.env.legal_positions()
+
+                if isinstance(agent, RandomAgent2):
+                    pos1, pos2 = agent.flip_cards_start(legal_positions, output)
+                    self.env.execute_action(agent, "flip card", pos1, output)
+                    self.env.execute_action(agent, "flip card", pos2, output)
+                    if output:
+                        self.env.print_game_field()
+
+                elif isinstance(agent, ReflexAgent2):
+                    pos1, pos2 = agent.flip_cards_start(legal_positions, self.env, output)
+                    self.env.execute_action(agent, "flip card", pos1, output)
+                    self.env.execute_action(agent, "flip card", pos2, output)
+                    if output:
+                        self.env.print_game_field()
+
+            # choose agent thats starts. That agent with the lowest card sum on field starts
+            card_sum = self.env.gamefield.calculate_sum_player(list(self.players_agents.values()),
+                                                               self.env.carddeck.card_value_mapping)
+
+            # sort card_sum dictionary by value
+            card_sum = {k: v for k, v in sorted(card_sum.items(), key=lambda item: item[1])}
+
+            first_agent = list(card_sum.keys())[0]
+            if output:
+                print(f"Agent {first_agent} starts!")
+
+            # create agent turn order
+            self.player_turn_order.append(first_agent)
+            for agent in self.players_agents.values():
+                if agent.name != first_agent:
+                    self.player_turn_order.append(agent.name)
+
+            if output:
+                print(f"Agent turn order: {self.player_turn_order}\n")
+                print("-" * 50)
+
+        else:
+            raise ValueError(
+                f"There must be at least one agent and no players! \nAgent: {self.env.agents}\nPlayer: {self.env.players}")
+
+    def turn_agents(self, agent_name, output: bool = True):
+        if len(self.env.agents) > 0 and len(self.env.players) == 0:
+
+            if output:
+                print(f"Agent {agent_name} turn!")
+
+            last_action = self.env.state[agent_name]["last_action"]
+            legal_actions = self.env.legal_actions(last_action, agent_name)
+
+            agent = self.env.agents[agent_name]
+
+            if isinstance(agent, RandomAgent2):
+                # make first action
+                action = agent.choose_random_action(legal_actions, output)
+                self.env.execute_action(self.env.agents[agent_name], action, None, output)
+
+                # make second action
+                legal_actions = self.env.legal_actions(action, agent_name)
+                action = agent.choose_random_action(legal_actions, output)
+                legal_positions = self.env.legal_positions(action, agent_name)
+                pos = agent.choose_random_position(legal_positions, output)
+                self.env.execute_action(self.env.agents[agent_name], action, pos, output)
+
+                if output:
+                    self.env.print_game_field()
+
+            elif isinstance(agent, ReflexAgent2):
+                action, action1, pos = agent.perform_action(self.env)
+                self.env.execute_action(self.env.agents[agent_name], action, None, output)
+                self.env.execute_action(self.env.agents[agent_name], action1, pos, output)
+
+                if output:
+                    print(f"Agent {agent_name} performed action {action} and {action1} at position {pos}!")
+                    self.env.print_game_field()
 
     def run_agents(self):
-        pass
+        end_agents = False
+        end = False
+
+        while not self.end:
+
+            for agent_name in self.player_turn_order:
+                self.turn_agents(agent_name)
+                end, name = self.env.gamefield.check_end()
+
+                if end and name in self.player_turn_order:
+                    print(f"Agent {name} ended the game. Everyone else has one more turn!")
+                    self.player_turn_order.remove(name.strip())
+                    end_agents = True
+                    break
+
+            if end_agents:
+                for agent_name in self.player_turn_order:
+                    self.turn_agents(agent_name)
+
+                    end, name = self.env.gamefield.check_end()
+
+            if end and end_agents:
+                self.end = True
+                self.__flip_all_cards()
+                print("Final board:\n", self.env.gamefield)
+                break
+
+        print("Game ended!")
+
+        # calculate winner
+        card_sum = self.env.gamefield.calculate_sum_player(list(self.players_agents.values()),
+                                                              self.env.carddeck.card_value_mapping)
+
+        # sort card_sum dictionary by value
+        card_sum = {k: v for k, v in sorted(card_sum.items(), key=lambda item: item[1])}
+
+        print(f"The winner is: {list(card_sum.keys())[0]}, Sum: {list(card_sum.values())[0]}")
+
+        # output of the other places
+        for i, agent_name in enumerate(list(card_sum.keys())[1:]):
+            print(f"{i + 2}. place: {agent_name}, Sum: {list(card_sum.values())[i + 1]}")
+
+        print("=" * 50)
+
+        return card_sum
 
 
 class Game(Environment):
@@ -839,16 +1032,17 @@ class Simulation:
 
 if __name__ == "__main__":
     carddeck = Carddeck()
-    player = Player("Nicolas", carddeck, (4, 3))
+    # player = Player("Nicolas", carddeck, (4, 3))
     # player1 = Player("Linus", carddeck, (4, 3))
     agent = RandomAgent2("RandomAgent", carddeck, (4, 3))
+    agent1 = ReflexAgent2("ReflexAgent", carddeck, (4, 3))
 
-    gamefield = GameField(4, 3, [player, agent], carddeck)
+    gamefield = GameField(4, 3, [agent1, agent], carddeck)
     environment = Environment(gamefield)
 
     game = Game2(environment)
-    game.start_player_agent()
-    # game.run_players()
+    game.start_agents(True)
+    game.run_agents()
 
     # S = Simulation(["ReflexAgent", "RandomAgent"])
     # S.simulate_agent_games_parallel(100)
