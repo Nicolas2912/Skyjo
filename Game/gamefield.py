@@ -60,6 +60,7 @@ class GameField:
                     sum_player = 0
                     for entry in tup:
                         if entry[2]:
+                            # print(card_value_mapping)
                             sum_player += card_value_mapping[str(entry[0])]
                         else:
                             sum_player += 0
