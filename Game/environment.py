@@ -21,6 +21,8 @@ class Environment:
         self.players = self.init_players(player_names)
         self.agents = self.init_agents(player_names)
 
+        self.players_agents = self.players | self.agents
+
         self.state = self.init_state()
 
     def init_players(self, player_names: list):
@@ -116,9 +118,9 @@ class Environment:
         if pos is not None and pos not in legal_positions:
             raise ValueError("Position is not legal!")
 
-        from agents.simple_reflex_agent import RandomAgent2
+        from agents.simple_reflex_agent import RandomAgent2, ReflexAgent2
 
-        if isinstance(player, RandomAgent2):
+        if isinstance(player, RandomAgent2) or isinstance(player, ReflexAgent2):
 
             if action == "flip card":
                 # I need this just for the beginning where I flip two cards
@@ -126,9 +128,32 @@ class Environment:
                 self.flip_card_on_field(player, pos, output)
 
                 # update self.state
-                self.state[player.name]["field"] = self.reformat_field_hidden(player)
-                self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
-                self.state[player.name]["last_action"] = action
+                self.update_state(player.name, action)
+
+            if action == "pull deck":
+                self.pull_card_deck(player, output)
+
+                # update self.state
+                self.update_state(player.name, action)
+
+            if action == "pull discard":
+                self.pull_card_discard_stack(player, output)
+
+                # update self.state
+                self.update_state(player.name, action)
+
+            elif pos is not None and action == "put discard":
+                player.put_card_on_discard_stack(self.carddeck, output)
+                self.flip_card_on_field(player, pos, output)
+
+                # update self.state
+                self.update_state(player.name, action)
+
+            elif pos is not None and action == "change card":
+                self.change_card(player, pos)
+
+                # update self.state
+                self.update_state(player.name, action)
 
         if isinstance(player, Player):
 
@@ -137,46 +162,41 @@ class Environment:
                 self.flip_card_on_field(player, pos, output)
 
                 # update self.state
-                self.state[player.name]["field"] = self.reformat_field_hidden(player)
-                self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
-                self.state[player.name]["last_action"] = action
+                self.update_state(player.name, action)
 
             if action == "pull deck":
                 self.pull_card_deck(player, output)
 
                 # update self.state
-                self.state[player.name]["player_hand"] = player.card_on_hand
-                self.state[player.name]["field"] = self.reformat_field_hidden(player)
-                self.state[player.name]["last_action"] = action
-                self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
+                self.update_state(player.name, action)
 
             if action == "pull discard":
                 self.pull_card_discard_stack(player, output)
 
                 # update self.state
-                self.state[player.name]["player_hand"] = player.card_on_hand
-                self.state[player.name]["field"] = self.reformat_field_hidden(player)
-                self.state[player.name]["last_action"] = action
-                self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
+                self.update_state(player.name, action)
 
             elif pos is not None and action == "put discard":
                 player.put_card_on_discard_stack(self.carddeck, output)
                 self.flip_card_on_field(player, pos, output)
 
                 # update self.state
-                self.state[player.name]["player_hand"] = player.card_on_hand
-                self.state[player.name]["field"] = self.reformat_field_hidden(player)
-                self.state[player.name]["last_action"] = action
-                self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
+                self.update_state(player.name, action)
 
             elif pos is not None and action == "change card":
                 self.change_card(player, pos)
 
                 # update self.state
-                self.state[player.name]["player_hand"] = player.card_on_hand
-                self.state[player.name]["field"] = self.reformat_field_hidden(player)
-                self.state[player.name]["last_action"] = action
-                self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
+                self.update_state(player.name, action)
+
+    def update_state(self, player_name, action):
+
+        player = self.players_agents[player_name]
+        self.state[player.name]["player_hand"] = player.card_on_hand
+        self.state[player.name]["field"] = self.reformat_field_hidden(player)
+        self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
+        self.state[player.name]["last_action"] = action
+
 
     def all_actions(self) -> list:
         all_actions = ["pull deck", "pull discard", "put discard", "change card", "flip card"]
@@ -225,13 +245,13 @@ class Environment:
     def flip_card_on_field(self, player, card_position: tuple, output: bool = True):
         self.gamefield.flip_card_on_field(player, card_position, output)
 
-    def pull_card_discard_stack(self, player: Player, output: bool = True):
+    def pull_card_discard_stack(self, player, output: bool = True):
         player.pull_card_from_discard_stack(self.carddeck, output)
 
-    def pull_card_deck(self, player: Player, output: bool = True):
+    def pull_card_deck(self, player, output: bool = True):
         player.pull_card_from_deck(self.carddeck, output)
 
-    def change_card(self, player: Player, card_position: tuple, output: bool = True):
+    def change_card(self, player, card_position: tuple, output: bool = True):
         self.gamefield.change_card_with_card_on_hand(player, card_position)
         player.put_card_on_discard_stack(self.carddeck, output)
 
