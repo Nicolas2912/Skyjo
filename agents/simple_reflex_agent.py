@@ -6,6 +6,9 @@ from Game.environment import Environment
 
 import random, time
 
+from copy import copy
+from collections import Counter
+
 
 # random.seed(time.process_time())
 
@@ -121,17 +124,9 @@ class ReflexAgent2(Carddeck):
         cards_flipped = {}
         for entry in field:
             if entry[2]:
-                cards_flipped[entry[1]] = entry[0]
+                cards_flipped[entry[1]] = card_mapping[str(entry[0])]
 
-        card_threshold = 5
-
-        try:
-            card_mapping[str(discard_stack[-1])] < int(max(cards_flipped.values()))
-        except Exception:
-            card_m = card_mapping[str(discard_stack[-1])]
-            max_cards = max(list(cards_flipped.values()))
-            print(card_mapping[str(discard_stack[-1])])
-            print(max(cards_flipped.values()))
+        card_threshold = 4
 
         # check if card on discard stack is lower than cards flipped
         if card_mapping[str(discard_stack[-1])] < int(max(cards_flipped.values())):
@@ -159,14 +154,15 @@ class ReflexAgent2(Carddeck):
             else:
                 action = "pull deck"
 
-                card_on_hand = env.state[self.name]["player_hand"]
+                # TODO: Hier brauche ich die Karte, die vom Deck gezogen worden ist!
+                card_on_hand_future = env.carddeck.cards[0]
 
-                if card_mapping[str(card_on_hand)] < max(cards_flipped.values()):
+                if card_mapping[str(card_on_hand_future)] < max(cards_flipped.values()):
                     action1 = "change card"
                     pos_max = max(cards_flipped, key=cards_flipped.get)
                     return action, action1, pos_max
-                elif card_on_hand in list(cards_flipped.values()):
-                    pos_card = [pos for pos, card in cards_flipped.items() if card == card_on_hand]
+                elif card_on_hand_future in list(cards_flipped.values()):
+                    pos_card = [pos for pos, card in cards_flipped.items() if card == card_on_hand_future]
                     pos_card = pos_card[0]
                     pos_card_next_positions = [(pos_card[0] + 1, pos_card[1]), (pos_card[0] - 1, pos_card[1]),
                                                (pos_card[0], pos_card[1] + 1), (pos_card[0], pos_card[1] - 1)]
@@ -180,7 +176,7 @@ class ReflexAgent2(Carddeck):
                         action1 = "change card"
                         return action, action1, pos_card_next_positions_flipped
                     else:
-                        if card_mapping[str(card_on_hand)] <= card_threshold:
+                        if card_mapping[str(card_on_hand_future)] <= card_threshold:
                             action1 = "change card"
                             legal_positions = env.legal_positions(action1, self.name)
                             pos = random.choice(legal_positions)
@@ -191,7 +187,7 @@ class ReflexAgent2(Carddeck):
                             pos = random.choice(legal_positions)
                             return action, action1, pos
                 else:
-                    if card_mapping[str(card_on_hand)] <= card_threshold:
+                    if card_mapping[str(card_on_hand_future)] <= card_threshold:
                         action1 = "change card"
                         legal_positions = env.legal_positions(action1, self.name)
                         pos = random.choice(legal_positions)
@@ -201,6 +197,78 @@ class ReflexAgent2(Carddeck):
                         legal_positions = env.legal_positions(action1, self.name)
                         pos = random.choice(legal_positions)
                         return action, action1, pos
+
+        else:
+            action = "pull deck"
+
+            card_on_hand_future = env.carddeck.cards[0]
+
+            for pos, value in cards_flipped.items():
+                cards_flipped[pos] = card_mapping[str(value)]
+
+            if card_mapping[str(card_on_hand_future)] < max(cards_flipped.values()):
+                action1 = "change card"
+                pos_max = max(cards_flipped, key=cards_flipped.get)
+                return action, action1, pos_max
+            elif card_on_hand_future in list(cards_flipped.values()):
+                pos_card = [pos for pos, card in cards_flipped.items() if card == card_on_hand_future]
+                pos_card = pos_card[0]
+                pos_card_next_positions = [(pos_card[0] + 1, pos_card[1]), (pos_card[0] - 1, pos_card[1]),
+                                           (pos_card[0], pos_card[1] + 1), (pos_card[0], pos_card[1] - 1)]
+                pos_card_next_positions = [pos for pos in pos_card_next_positions if pos in env.all_positions()]
+                pos_card_next_positions_not_flipped_list = [pos for pos in pos_card_next_positions if
+                                                            pos not in cards_flipped.keys()]
+                if len(pos_card_next_positions_not_flipped_list) > 0:
+                    pos_card_next_positions_flipped = random.choice(pos_card_next_positions_not_flipped_list)
+                    action1 = "change card"
+                    return action, action1, pos_card_next_positions_flipped
+                else:
+                    if card_mapping[str(card_on_hand_future)] <= card_threshold:
+                        action1 = "change card"
+                        legal_positions = env.legal_positions(action1, self.name)
+                        pos = random.choice(legal_positions)
+                        return action, action1, pos
+                    else:
+                        action1 = "put discard"
+                        legal_positions = env.legal_positions(action1, self.name)
+                        pos = random.choice(legal_positions)
+                        return action, action1, pos
+            else:
+                if card_mapping[str(card_on_hand_future)] <= card_threshold:
+                    action1 = "change card"
+                    legal_positions = env.legal_positions(action1, self.name)
+                    pos = random.choice(legal_positions)
+                    return action, action1, pos
+                else:
+                    action1 = "put discard"
+                    legal_positions = env.legal_positions(action1, self.name)
+                    pos = random.choice(legal_positions)
+                    return action, action1, pos
+
+    def calculate_probabilities(self, env: Environment):
+        field = env.state[self.name]["field"]
+        discard_stack = env.state["discard_stack"]
+
+        cards = self.init_carddeck()
+        number_all_cards = len(cards)
+
+        probabilities = {}
+
+        cards_counter = Counter(cards)
+        cards_counter = sorted(cards_counter.items(), key=lambda x: x[1], reverse=False)
+        cards_counter = dict(cards_counter)
+
+        for card, count in cards_counter.items():
+            probabilities[str(card)] = count / number_all_cards
+
+        # update probabilities with card in discard stack
+        card_in_discard_stack = discard_stack[-1]
+        probabilities[str(card_in_discard_stack)] = (cards_counter[card_in_discard_stack] - 1) / (number_all_cards - 1)
+
+        print(f"Card on discard stack: {card_in_discard_stack}")
+        print(probabilities)
+
+        # TODO: Hier weitermachen! Anzahl der Karten, die im Spiel sind (number_all_cards) muss variabel sein, da Spiel sich ändert.
 
     def flip_card(self, positions: list, output: bool = True):
         pos = random.choice(positions)
@@ -239,7 +307,8 @@ class ReflexAgent2(Carddeck):
         try:
             card_on_hand = carddeck.cards[0]
         except Exception as e:
-            print(carddeck.cards)
+            raise ValueError("Carddeck is empty! Cannot pull card from empty carddeck!")
+
         carddeck.cards.remove(card_on_hand)
         self.card_on_hand = card_on_hand
         if output:
@@ -259,193 +328,16 @@ class ReflexAgent2(Carddeck):
             raise ValueError("Discard stack is empty! Cannot pull card from empty discard stack!")
 
 
-class ReflexAgent(Environment):
-
-    def __init__(self, player_names: list, carddeck: Carddeck, gamefield: GameField, agent_name: str = "ReflexAgent"):
-        super().__init__(player_names, carddeck, gamefield)
-        self.player_names = player_names
-        self.agent_name = agent_name
-
-        self.agent_player = self.players[self.agent_name]
-
-        # agent name because agent just act for its name and player act for name in player_names
-        if agent_name not in player_names:
-            raise ValueError(f"Agent name ({self.agent_name}) must be in player names!")
-
-        self.state = self.init_state()
-
-    def act(self, output: bool = True):
-        if self.state[self.agent_name]["state_of_game"] == "beginning":
-            # choose random positions
-            all_positions = self.all_positions()
-            position1 = random.choice(all_positions)
-
-            # choose next position on random but only a position that is next to the first position (up or down or left or right) and is not position1
-            position1_next = [(position1[0] + 1, position1[1]), (position1[0] - 1, position1[1]),
-                              (position1[0], position1[1] + 1), (position1[0], position1[1] - 1)]
-            position1_next = [pos for pos in position1_next if pos in all_positions]
-            position2 = random.choice(position1_next)
-
-            action = "flip card"
-            self.execute_action(self.agent_player, action, position1, output)
-            self.execute_action(self.agent_player, action, position2, output)
-            if output:
-                print(f"Agent {self.agent_name} flipped cards at position {position1} and {position2}")
-            self.state[self.agent_name]["last_action"] = action
-
-            self.state[self.agent_name]["state_of_game"] = "running"
-
-        elif self.state[self.agent_name]["state_of_game"] == "running":
-            last_action = self.state[self.agent_name]["last_action"]
-            legal_actions = self.legal_actions(last_action, self.agent_name)
-
-            # choose action
-            card_mapping = self.carddeck.card_value_mapping
-            field = self.state[self.agent_name]["field"]
-            cards_flipped = {}
-            for entry in field:
-                if entry[2]:
-                    cards_flipped[entry[1]] = entry[0]
-
-            for pos, value in cards_flipped.items():
-                cards_flipped[pos] = card_mapping[str(value)]
-
-            card_threshold = -2
-
-            # check if card on discard stack is lower than cards flipped
-            discard_stack = self.state["discard_stack"]
-            if card_mapping[str(discard_stack[-1])] < max(cards_flipped.values()):
-                action = "pull discard"
-                self.execute_action(self.agent_player, action, None, output)
-                action = "change card"
-                pos_max = max(cards_flipped, key=cards_flipped.get)
-                self.execute_action(self.agent_player, action, pos_max, output)
-
-            elif card_mapping[str(discard_stack[-1])] in list(cards_flipped.values()):
-                pos_card = [pos for pos, card in cards_flipped.items() if card == card_mapping[str(discard_stack[-1])]]
-                pos_card = pos_card[0]
-                pos_card_next_positions = [(pos_card[0] + 1, pos_card[1]), (pos_card[0] - 1, pos_card[1]),
-                                           (pos_card[0], pos_card[1] + 1), (pos_card[0], pos_card[1] - 1)]
-                pos_card_next_positions = [pos for pos in pos_card_next_positions if pos in self.all_positions()]
-
-                # check if card on position next to card is flipped or not
-                pos_card_next_positions_not_flipped_list = [pos for pos in pos_card_next_positions if
-                                                            pos not in cards_flipped.keys()]
-                if len(pos_card_next_positions_not_flipped_list) > 0:
-                    pos_card_next_positions_flipped = random.choice(pos_card_next_positions_not_flipped_list)
-                    action = "pull discard"
-                    self.execute_action(self.agent_player, action, None, output)
-                    action = "change card"
-                    self.execute_action(self.agent_player, action, pos_card_next_positions_flipped, output)
-                else:
-                    action = "pull deck"
-                    self.execute_action(self.agent_player, action, None, output)
-
-                    card_on_hand = self.state[self.agent_name]["player_hand"]
-
-                    if card_mapping[str(card_on_hand)] < max(cards_flipped.values()):
-                        action = "change card"
-                        pos_max = max(cards_flipped, key=cards_flipped.get)
-                        self.execute_action(self.agent_player, action, pos_max, output)
-                    elif card_on_hand in list(cards_flipped.values()):
-                        pos_card = [pos for pos, card in cards_flipped.items() if card == card_on_hand]
-                        pos_card = pos_card[0]
-                        pos_card_next_positions = [(pos_card[0] + 1, pos_card[1]), (pos_card[0] - 1, pos_card[1]),
-                                                   (pos_card[0], pos_card[1] + 1), (pos_card[0], pos_card[1] - 1)]
-                        pos_card_next_positions = [pos for pos in pos_card_next_positions if
-                                                   pos in self.all_positions()]
-                        pos_card_next_positions_not_flipped_list = [pos for pos in pos_card_next_positions if
-                                                                    pos not in cards_flipped.keys()]
-                        if len(pos_card_next_positions_not_flipped_list) > 0:
-                            pos_card_next_positions_flipped = random.choice(pos_card_next_positions_not_flipped_list)
-                            action = "change card"
-                            self.execute_action(self.agent_player, action, pos_card_next_positions_flipped, output)
-                        else:
-                            if card_mapping[str(card_on_hand)] <= card_threshold:
-                                action = "change card"
-                                legal_positions = self.legal_positions(action, self.agent_name)
-                                pos = random.choice(legal_positions)
-                                self.execute_action(self.agent_player, action, pos, output)
-                            else:
-                                action = "put discard"
-                                legal_positions = self.legal_positions(action, self.agent_name)
-                                pos = random.choice(legal_positions)
-                                self.execute_action(self.agent_player, action, pos, output)
-                    else:
-                        if card_mapping[str(card_on_hand)] <= card_threshold:
-                            action = "change card"
-                            legal_positions = self.legal_positions(action, self.agent_name)
-                            pos = random.choice(legal_positions)
-                            self.execute_action(self.agent_player, action, pos, output)
-                        else:
-                            action = "put discard"
-                            legal_positions = self.legal_positions(action, self.agent_name)
-                            pos = random.choice(legal_positions)
-                            self.execute_action(self.agent_player, action, pos, output)
-
-            else:
-                action = "pull deck"
-                self.execute_action(self.agent_player, action, None, output)
-
-                card_on_hand = self.state[self.agent_name]["player_hand"]
-
-                # print(f"card on hand: {card_on_hand}")
-                # print(f"max cards flipped: {max(cards_flipped.values())}")
-
-                for pos, value in cards_flipped.items():
-                    cards_flipped[pos] = card_mapping[str(value)]
-
-                if card_mapping[str(card_on_hand)] < max(cards_flipped.values()):
-                    action = "change card"
-                    pos_max = max(cards_flipped, key=cards_flipped.get)
-                    self.execute_action(self.agent_player, action, pos_max, output)
-                elif card_on_hand in list(cards_flipped.values()):
-                    pos_card = [pos for pos, card in cards_flipped.items() if card == card_on_hand]
-                    pos_card = pos_card[0]
-                    pos_card_next_positions = [(pos_card[0] + 1, pos_card[1]), (pos_card[0] - 1, pos_card[1]),
-                                               (pos_card[0], pos_card[1] + 1), (pos_card[0], pos_card[1] - 1)]
-                    pos_card_next_positions = [pos for pos in pos_card_next_positions if pos in self.all_positions()]
-                    pos_card_next_positions_not_flipped_list = [pos for pos in pos_card_next_positions if
-                                                                pos not in cards_flipped.keys()]
-                    if len(pos_card_next_positions_not_flipped_list) > 0:
-                        pos_card_next_positions_flipped = random.choice(pos_card_next_positions_not_flipped_list)
-                        action = "change card"
-                        self.execute_action(self.agent_player, action, pos_card_next_positions_flipped, output)
-                    else:
-                        if card_mapping[str(card_on_hand)] <= card_threshold:
-                            action = "change card"
-                            legal_positions = self.legal_positions(action, self.agent_name)
-                            pos = random.choice(legal_positions)
-                            self.execute_action(self.agent_player, action, pos, output)
-                        else:
-                            action = "put discard"
-                            legal_positions = self.legal_positions(action, self.agent_name)
-                            pos = random.choice(legal_positions)
-                            self.execute_action(self.agent_player, action, pos, output)
-                else:
-                    if card_mapping[str(card_on_hand)] <= card_threshold:
-                        action = "change card"
-                        legal_positions = self.legal_positions(action, self.agent_name)
-                        pos = random.choice(legal_positions)
-                        self.execute_action(self.agent_player, action, pos, output)
-                    else:
-                        action = "put discard"
-                        legal_positions = self.legal_positions(action, self.agent_name)
-                        pos = random.choice(legal_positions)
-                        self.execute_action(self.agent_player, action, pos, output)
-
-            if output:
-                print(f"Agent {self.agent_name} executed action {action}")
-                print()
-                self.print_game_field()
-
-
 if __name__ == "__main__":
     agent_name = "RandomAgent"
     agent_name1 = "RandomAgent1"
 
     c = Carddeck()
 
-    randomagent = RandomAgent2(agent_name, c, (4, 3))
+    reflexagent = ReflexAgent2(agent_name, c, (4, 3))
 
-    print(type(randomagent))
+    gamefield = GameField(4, 3, [reflexagent], c)
+
+    env = Environment(gamefield)
+
+    reflexagent.calculate_probabilities(env)
