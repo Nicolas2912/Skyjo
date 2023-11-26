@@ -150,7 +150,7 @@ class Environment:
                 self.update_state(player.name, action)
 
             elif pos is not None and action == "change card":
-                self.change_card(player, pos)
+                self.change_card(player, pos, output)
 
                 # update self.state
                 self.update_state(player.name, action)
@@ -184,7 +184,7 @@ class Environment:
                 self.update_state(player.name, action)
 
             elif pos is not None and action == "change card":
-                self.change_card(player, pos)
+                self.change_card(player, pos, output)
 
                 # update self.state
                 self.update_state(player.name, action)
