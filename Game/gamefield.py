@@ -89,7 +89,7 @@ class GameField:
 
         return sum_player_dict
 
-    def flip_card_on_field(self, player: Player, position: tuple, output: bool = True):
+    def flip_card_on_field(self, player, position: tuple, output: bool = True):
         def flip_card_on_field_helper(player, position: tuple):
             for dic in self.field_hidden:
                 for name, array in dic.items():
@@ -114,7 +114,7 @@ class GameField:
             new_position = eval(new_position)
             flipped = flip_card_on_field_helper(player, new_position)
 
-    def change_card_with_card_on_hand(self, player: Player, position: tuple):
+    def change_card_with_card_on_hand(self, player, position: tuple):
         if player.card_on_hand is None:
             print("No card on hand!")
             return False
@@ -139,7 +139,14 @@ class GameField:
 
     def check_full_line(self):
 
-        # check if all cards in a column are the same (height = 3)
+        def check_consecutive(lst, n):
+            for i in range(len(lst) - n + 1):
+                if len(set(lst[i:i + n])) == 1:
+                    return True
+            return False
+
+
+        # check if all cards in a column are the same (height = 3 / column)
         for dic in self.field_hidden:
             for name, field in dic.items():
 
@@ -151,12 +158,13 @@ class GameField:
                     column_counts = Counter(column_values)
                     column_counts_dict = dict(column_counts)
 
-                    if len(column_counts_dict.values()) == 1 and list(column_counts_dict.values())[0] == self.height:
+                    if len(column_counts_dict.values()) == 1 and list(column_counts_dict.values())[
+                        0] == self.height and self.star_string not in list(column_counts_dict.keys()):
                         for entry in field:
                             if entry[1][1] == column[1][1] and entry[2]:
                                 entry[0] = "-"
 
-        # check if all cards in a row are the same (length = 4)
+        # check if all cards in a row are the same (length = 4 / row)
         for dic in self.field_hidden:
             for name, field in dic.items():
                 for row in field:
@@ -166,13 +174,15 @@ class GameField:
 
                     already_set = False
                     if not already_set and len(row_counts_dict.values()) > 0:
-                        if (len(row_counts_dict.values()) == 1 and list(row_counts_dict.values())[
-                            0] == self.length) or (len(row_counts_dict.values()) == 2 and self.length - 1 in list(
-                            row_counts_dict.values())):
-                            for entry in field:
-                                if entry[1][0] == row[1][0] and entry[2]:
-                                    entry[0] = "-"
-                        already_set = True
+                        if check_consecutive(row_values, self.length):
+                            if (len(row_counts_dict.values()) == 1 and list(row_counts_dict.values())[
+                                0] == self.length and self.star_string not in list(row_counts_dict.keys())) or (
+                                    len(row_counts_dict.values()) == 2 and self.length - 1 in list(
+                                    row_counts_dict.values()) and self.star_string not in list(row_counts_dict.keys())):
+                                for entry in field:
+                                    if entry[1][0] == row[1][0] and entry[2]:
+                                        entry[0] = "-"
+                            already_set = True
 
     def _set_values(self, player: Player, position: tuple, value):
         for dic in self.field_hidden:
@@ -235,13 +245,14 @@ if __name__ == "__main__":
     star = G.star_string
 
     # print(G)
-    G.flip_card_on_field(N, (0, 0))
-    G._set_values(N, (1, 0), 0)
-    G._set_values(N, (2, 0), 0)
+    G._set_values(N, (0, 1), 0)
+    G._set_values(N, (1, 1), 0)
+    G._set_values(N, (2, 1), 0)
 
     G._set_values(N, (0, 3), 0)
     G._set_values(N, (0, 2), 0)
     G._set_values(N, (0, 1), 0)
+    G._set_values(N, (0, 0), 0)
 
     # G._set_values(N, (1, 2), 9)
     # G._set_values(A, (2, 2), 9)
