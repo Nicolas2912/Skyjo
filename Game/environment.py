@@ -3,6 +3,7 @@ from Game.carddeck import Carddeck
 from Game.gamefield import GameField
 
 import copy
+from collections import Counter
 
 
 class Environment:
@@ -63,9 +64,29 @@ class Environment:
             # states of game: beginning, running, finished
             state[player_name]["state_of_game"] = self.state_of_game(player_name)
 
+        # TODO: Add probabilities for each card and track cards.
+        state["probabilities"] = {}
+
         state["discard_stack"] = self.carddeck.discard_stack
 
         return state
+
+    def calc_probabilities(self):
+        player_agents = self.players | self.agents # dict
+        number_player_agents = len(player_agents)
+        carddeck_new = Carddeck()
+        cards_counter = Counter(carddeck_new.all_cards)
+        discard_stack_card = self.carddeck.discard_stack[-1]
+
+        cards_counter[discard_stack_card] -= 1
+
+        probabilities = {}
+        for card, count in cards_counter.items():
+            probabilities[card] = count / (len(carddeck_new.all_cards) - 1)
+
+        # init probabilities with one card on discard stack
+        print(probabilities)
+
 
     def reformat_field_hidden(self, player):
         field_hidden = self.gamefield.field_hidden
@@ -264,28 +285,11 @@ class Environment:
 
 if __name__ == "__main__":
     carddeck = Carddeck()
-    print(len(carddeck.cards))
-    player_names = ["Nicolas"]
-    agent_names = ["RandomAgent1", "RandomAgent2"]
+    player1 = Player("Player1", carddeck, (4, 3))
+    gamefield = GameField(4, 3, [player1], carddeck)
+    env = Environment(gamefield)
+    env.calc_probabilities()
 
-    player = Player("Nicolas", carddeck, (4, 3))
-    from agents.simple_reflex_agent import RandomAgent2, ReflexAgent2
-
-    agent = RandomAgent2("RandomAgent1", carddeck, (4, 3))
-    agent1 = RandomAgent2("RandomAgent2", carddeck, (4, 3))
-
-    gamefield = GameField(4, 3, [player, agent, agent1], carddeck)
-
-    print(len(carddeck.cards))
-
-    print(gamefield)
-
-    E = Environment(carddeck, gamefield)
-
-    print(E.agents)
-    print(E.players)
-
-    print(len(carddeck.cards))
 
     # E.execute_action(E.players["Nicolas"], "flip card", (0, 0))
     # E.execute_action(E.players["Nicolas"], "flip card", (0, 1))
