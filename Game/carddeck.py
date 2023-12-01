@@ -14,6 +14,8 @@ class Carddeck:
         self.card_value_mapping = self.value_string_mapping()
         self.discard_stack = [self.cards.pop(0)]
 
+        self.all_cards = self.cards + self.discard_stack
+
     def init_carddeck(self) -> list:
         cards = [card for card in range(-1, 13) for _ in range(7) if card != 0]
         cards.extend([-2 for _ in range(3)])
