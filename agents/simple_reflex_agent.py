@@ -154,7 +154,6 @@ class ReflexAgent2(Carddeck):
             else:
                 action = "pull deck"
 
-                # TODO: Hier brauche ich die Karte, die vom Deck gezogen worden ist!
                 card_on_hand_future = env.carddeck.cards[0]
 
                 if card_mapping[str(card_on_hand_future)] < max(cards_flipped.values()):
