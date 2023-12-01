@@ -26,6 +26,9 @@ class Environment:
 
         self.state = self.init_state()
 
+        self.number_all_cards = self.carddeck.all_cards # number of all cards with no card on discard stack
+
+
     def init_players(self, player_names: list):
         players = {}
         for player_name in player_names:
@@ -71,22 +74,38 @@ class Environment:
 
         return state
 
-    def calc_probabilities(self):
-        player_agents = self.players | self.agents # dict
-        number_player_agents = len(player_agents)
-        carddeck_new = Carddeck()
-        cards_counter = Counter(carddeck_new.all_cards)
-        discard_stack_card = self.carddeck.discard_stack[-1]
-
-        cards_counter[discard_stack_card] -= 1
-
+    def _update_probabilities(self, cards_counter, number_all_cards):
         probabilities = {}
         for card, count in cards_counter.items():
-            probabilities[card] = count / (len(carddeck_new.all_cards) - 1)
+            probabilities[card] = count / (number_all_cards)
 
-        # init probabilities with one card on discard stack
-        print(probabilities)
+        return probabilities
 
+    def _update_probabilities_discard_stack(self, cards_counter, discard_stack, number_all_cards):
+        number_all_cards -= len(discard_stack)
+        for card in discard_stack:
+            cards_counter[str(card)] -= 1
+
+        return cards_counter, discard_stack, number_all_cards
+
+    def calc_probabilities(self):
+        player_agents = self.players | self.agents  # dict
+        number_player_agents = len(player_agents)
+        cards_counter = Counter(self.carddeck.all_cards)
+
+        # make all keys in cards_counter strings
+        cards_counter = {str(key): value for key, value in cards_counter.items()}
+
+        # update probabilities with discard stack
+        cards_counter, discard_stack, number_all_cards = self._update_probabilities_discard_stack(cards_counter,
+                                                                                                  self.carddeck.discard_stack,
+                                                                                                  self.number_all_cards)
+
+        self.number_all_cards = number_all_cards
+
+        probabilities = self._update_probabilities(cards_counter, self.number_all_cards)
+
+        return probabilities
 
     def reformat_field_hidden(self, player):
         field_hidden = self.gamefield.field_hidden
@@ -218,7 +237,6 @@ class Environment:
         self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
         self.state[player.name]["last_action"] = action
 
-
     def all_actions(self) -> list:
         all_actions = ["pull deck", "pull discard", "put discard", "change card", "flip card"]
         return all_actions
@@ -289,7 +307,6 @@ if __name__ == "__main__":
     gamefield = GameField(4, 3, [player1], carddeck)
     env = Environment(gamefield)
     env.calc_probabilities()
-
 
     # E.execute_action(E.players["Nicolas"], "flip card", (0, 0))
     # E.execute_action(E.players["Nicolas"], "flip card", (0, 1))
