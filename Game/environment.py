@@ -24,10 +24,9 @@ class Environment:
 
         self.players_agents = self.players | self.agents
 
+        self.number_all_cards = len(self.carddeck.all_cards)  # number of all cards with no card on discard stack
+
         self.state = self.init_state()
-
-        self.number_all_cards = self.carddeck.all_cards # number of all cards with no card on discard stack
-
 
     def init_players(self, player_names: list):
         players = {}
@@ -67,8 +66,7 @@ class Environment:
             # states of game: beginning, running, finished
             state[player_name]["state_of_game"] = self.state_of_game(player_name)
 
-        # TODO: Add probabilities for each card and track cards.
-        state["probabilities"] = {}
+        state["probabilities"] = self.calc_probabilities()
 
         state["discard_stack"] = self.carddeck.discard_stack
 
@@ -77,33 +75,77 @@ class Environment:
     def _update_probabilities(self, cards_counter, number_all_cards):
         probabilities = {}
         for card, count in cards_counter.items():
-            probabilities[card] = count / (number_all_cards)
+            try:
+                probabilities[card] = count / (number_all_cards)
+            except Exception as e:
+                print(e)
+                print(self.number_all_cards)
+                break
 
         return probabilities
 
-    def _update_probabilities_discard_stack(self, cards_counter, discard_stack, number_all_cards):
-        number_all_cards -= len(discard_stack)
+    def _update_probabilities_discard_stack(self, cards_counter, discard_stack):
         for card in discard_stack:
-            cards_counter[str(card)] -= 1
+            if card != "-" and cards_counter[str(card)] > 0:
+                cards_counter[str(card)] -= 1
+            elif card == "-":
+                self.gamefield.check_full_line()
+                print(f"field hidden: {self.gamefield.field_hidden}")
+                print(f"field environment: {self.state['ReflexAgent']['field']}")
+                print("Error: Card is -")
+                print(f"discard stack: {discard_stack}")
+                # TODO: Irgendwie aktualisiert der das field (field_hidden) nicht korrekt, sodass zar 3 "-" angezeigt werden, aber intern wird das nicht so gespeichert
+                raise ValueError("Card is -")
 
-        return cards_counter, discard_stack, number_all_cards
+        return cards_counter, discard_stack
+
+    def _update_probabilities_field(self, cards_counter, field):
+        for dic in field:
+            for name, field in dic.items():
+                for entry in field:
+                    if entry[2] and entry[0] != "-" and cards_counter[str(entry[0])] > 0:
+                        cards_counter[str(entry[0])] -= 1
+
+        return cards_counter
+
+    def _update_number_all_cards(self, cards_counter, discard_stack, field):
+        number_all_cards = 120
+
+        for card in discard_stack:
+            if card != "-" and cards_counter[str(card)] > 0:
+                number_all_cards -= 1
+            elif card == "-":
+                print("Error: Card is -")
+                print(f"discard stack: {discard_stack}")
+
+                raise ValueError("Card is -")
+
+        for dic in field:
+            for name, field in dic.items():
+                for entry in field:
+                    if entry[2] and entry[0] != "-" and cards_counter[str(entry[0])] > 0:
+                        number_all_cards -= 1
+
+        return number_all_cards
 
     def calc_probabilities(self):
-        player_agents = self.players | self.agents  # dict
-        number_player_agents = len(player_agents)
         cards_counter = Counter(self.carddeck.all_cards)
 
         # make all keys in cards_counter strings
         cards_counter = {str(key): value for key, value in cards_counter.items()}
 
         # update probabilities with discard stack
-        cards_counter, discard_stack, number_all_cards = self._update_probabilities_discard_stack(cards_counter,
-                                                                                                  self.carddeck.discard_stack,
-                                                                                                  self.number_all_cards)
+        cards_counter, discard_stack = self._update_probabilities_discard_stack(cards_counter,
+                                                                                self.carddeck.discard_stack)
 
-        self.number_all_cards = number_all_cards
+        cards_counter = self._update_probabilities_field(cards_counter,
+                                                         self.gamefield.field_hidden)
 
-        probabilities = self._update_probabilities(cards_counter, self.number_all_cards)
+        number_all_cards = self._update_number_all_cards(cards_counter,
+                                                         self.carddeck.discard_stack,
+                                                         self.gamefield.field_hidden)
+
+        probabilities = self._update_probabilities(cards_counter, number_all_cards)
 
         return probabilities
 
@@ -156,6 +198,8 @@ class Environment:
 
         # check if position is legal
         if pos is not None and pos not in legal_positions:
+            print(f"Legal positions are: {legal_positions}")
+            print(f"Your position is: {pos}")
             raise ValueError("Position is not legal!")
 
         from agents.simple_reflex_agent import RandomAgent2, ReflexAgent2
@@ -237,6 +281,8 @@ class Environment:
         self.state[player.name]["state_of_game"] = self.state_of_game(player.name)
         self.state[player.name]["last_action"] = action
 
+        self.state["probabilities"] = self.calc_probabilities()
+
     def all_actions(self) -> list:
         all_actions = ["pull deck", "pull discard", "put discard", "change card", "flip card"]
         return all_actions
@@ -270,13 +316,16 @@ class Environment:
         return legal_actions
 
     def legal_positions(self, action: str = None, player_name: str = None):
-        legal_positions = self.all_positions()
-
         if action == "put discard":
             # just get the positions where card is not flipped (False)
             legal_positions = []
             for entry in self.state[player_name]["field"]:
-                if not entry[2]:
+                if not entry[2] and entry[0] != "-":
+                    legal_positions.append(entry[1])
+        else:
+            legal_positions = []
+            for entry in self.state[player_name]["field"]:
+                if entry[0] != "-":
                     legal_positions.append(entry[1])
 
         return legal_positions
@@ -306,35 +355,14 @@ if __name__ == "__main__":
     player1 = Player("Player1", carddeck, (4, 3))
     gamefield = GameField(4, 3, [player1], carddeck)
     env = Environment(gamefield)
-    env.calc_probabilities()
 
-    # E.execute_action(E.players["Nicolas"], "flip card", (0, 0))
-    # E.execute_action(E.players["Nicolas"], "flip card", (0, 1))
-    # print(len(carddeck.cards))
-    # E.execute_action(E.players["Nicolas"], "pull deck", (0, 2))
-    # print(E.state)
-    #
-    # E.execute_action(E.players["Nicolas"], "put discard", (0, 3))
-    #
-    # print(carddeck.discard_stack)
-    # print(len(carddeck.cards))
+    print(env.carddeck.discard_stack)
 
-    # print(E.agents)
+    env.execute_action(env.players["Player1"], "flip card", (0, 0))
+    env.execute_action(env.players["Player1"], "flip card", (0, 1))
+    print(env.gamefield.field_hidden)
 
-    # E.execute_action(E.players["Player1"], "put discard", (0, 0))
-
-    # E.execute_action(E.players["Player1"], "change card", (0, 1))
-
-    # print(E.state)
-
-    # state = E.state
-    # print(state)
-    # print(state.keys())
-    # print(state.values())
-    # print(state["Player1"])
-
-    # E.execute_action(E.players["Player1"], "put discard", (0, 0))
-    # print(E.get_state())
-
-    # state:
-    # {player1: {player_hand: "1", field: [['1', (0,0), False], ...]}, player2: {player_hand: "2", field: [['2', (0,0), False], ...]}}
+    env.execute_action(env.players["Player1"], "pull deck")
+    env.execute_action(env.players["Player1"], "change card", (0, 2))
+    print(env.gamefield.field_hidden)
+    print(env.carddeck.discard_stack)
