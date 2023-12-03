@@ -57,9 +57,10 @@ class RandomAgent2(Carddeck):
     def put_card_on_discard_stack(self, carddeck: Carddeck, output: bool = True):
         if self.card_on_hand is not None:
             carddeck.discard_stack.append(self.card_on_hand)
+            card_on_hand_loc = self.card_on_hand
             self.card_on_hand = None
             if output:
-                print(f"Agent {self.name} put card on discard stack!")
+                print(f"Agent {self.name} put card {card_on_hand_loc} on discard stack!")
         else:
             raise ValueError("Agent has no card on hand! Cannot put card on discard stack!")
 
@@ -118,7 +119,6 @@ class ReflexAgent2(Carddeck):
     def perform_action(self, env: Environment):
         discard_stack = env.state["discard_stack"]
         field = env.state[self.name]["field"]
-        last_action = env.state[self.name]["last_action"]
 
         card_mapping = self.card_value_mapping
         cards_flipped = {}
@@ -141,7 +141,7 @@ class ReflexAgent2(Carddeck):
             pos_card = pos_card[0]
             pos_card_next_positions = [(pos_card[0] + 1, pos_card[1]), (pos_card[0] - 1, pos_card[1]),
                                        (pos_card[0], pos_card[1] + 1), (pos_card[0], pos_card[1] - 1)]
-            pos_card_next_positions = [pos for pos in pos_card_next_positions if pos in env.all_positions()]
+            pos_card_next_positions = [pos for pos in pos_card_next_positions if pos in env.legal_positions(player_name=self.name)]
 
             # check if card on position next to card is flipped or not
             pos_card_next_positions_not_flipped_list = [pos for pos in pos_card_next_positions if
@@ -166,7 +166,7 @@ class ReflexAgent2(Carddeck):
                     pos_card_next_positions = [(pos_card[0] + 1, pos_card[1]), (pos_card[0] - 1, pos_card[1]),
                                                (pos_card[0], pos_card[1] + 1), (pos_card[0], pos_card[1] - 1)]
                     pos_card_next_positions = [pos for pos in pos_card_next_positions if
-                                               pos in env.all_positions()]
+                                               pos in env.legal_positions(player_name=self.name)]
                     pos_card_next_positions_not_flipped_list = [pos for pos in pos_card_next_positions if
                                                                 pos not in cards_flipped.keys()]
 
@@ -214,7 +214,7 @@ class ReflexAgent2(Carddeck):
                 pos_card = pos_card[0]
                 pos_card_next_positions = [(pos_card[0] + 1, pos_card[1]), (pos_card[0] - 1, pos_card[1]),
                                            (pos_card[0], pos_card[1] + 1), (pos_card[0], pos_card[1] - 1)]
-                pos_card_next_positions = [pos for pos in pos_card_next_positions if pos in env.all_positions()]
+                pos_card_next_positions = [pos for pos in pos_card_next_positions if pos in env.legal_positions(player_name=self.name)]
                 pos_card_next_positions_not_flipped_list = [pos for pos in pos_card_next_positions if
                                                             pos not in cards_flipped.keys()]
                 if len(pos_card_next_positions_not_flipped_list) > 0:
@@ -243,6 +243,9 @@ class ReflexAgent2(Carddeck):
                     legal_positions = env.legal_positions(action1, self.name)
                     pos = random.choice(legal_positions)
                     return action, action1, pos
+
+    def perform_action_probs(self, env: Environment):
+        pass
 
     def calculate_probabilities(self, env: Environment):
         field = env.state[self.name]["field"]
@@ -296,9 +299,10 @@ class ReflexAgent2(Carddeck):
     def put_card_on_discard_stack(self, carddeck: Carddeck, output: bool = True):
         if self.card_on_hand is not None:
             carddeck.discard_stack.append(self.card_on_hand)
+            card_on_hand_loc = self.card_on_hand
             self.card_on_hand = None
             if output:
-                print(f"Agent {self.name} put card on discard stack!")
+                print(f"Agent {self.name} put card {card_on_hand_loc} on discard stack!")
         else:
             raise ValueError("Agent has no card on hand! Cannot put card on discard stack!")
 
