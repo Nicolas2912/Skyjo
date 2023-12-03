@@ -60,7 +60,6 @@ class GameField:
                     sum_player = 0
                     for entry in tup:
                         if entry[2]:
-                            # print(card_value_mapping)
                             sum_player += card_value_mapping[str(entry[0])]
                         else:
                             sum_player += 0
@@ -99,11 +98,11 @@ class GameField:
                             if entry[1] == position:
                                 if not entry[2]:
                                     entry[2] = True
-                                    self.check_full_line()
                                     return True
                                 else:
                                     return False
 
+        self.check_full_line()
         flipped = flip_card_on_field_helper(player, position)
         if output:
             if flipped:
@@ -127,16 +126,20 @@ class GameField:
                             if entry[1] == position:
                                 card_on_field = entry[0]
                                 entry[0] = player.card_on_hand
-                                player.card_on_hand = None
 
-                                try:
-                                    player.card_on_hand = eval(card_on_field)
-                                except Exception:
+                                if card_on_field == self.star_string:
                                     player.card_on_hand = card_on_field
+                                elif isinstance(card_on_field, int):
+                                    player.card_on_hand = card_on_field
+                                elif isinstance(card_on_field,
+                                                str) and card_on_field != self.star_string and card_on_field != "-":
+                                    player.card_on_hand = int(card_on_field)
+                                elif isinstance(card_on_field, np.int32):
+                                    player.card_on_hand = card_on_field.astype(int)
 
                                 entry[2] = True
-                                self.check_full_line()
-                                return True
+
+        self.check_full_line()
 
     def check_full_line(self):
 
@@ -145,7 +148,6 @@ class GameField:
                 if len(set(lst[i:i + n])) == 1:
                     return True
             return False
-
 
         # check if all cards in a column are the same (height = 3 / column)
         for dic in self.field_hidden:
@@ -179,7 +181,7 @@ class GameField:
                             if (len(row_counts_dict.values()) == 1 and list(row_counts_dict.values())[
                                 0] == self.length and self.star_string not in list(row_counts_dict.keys())) or (
                                     len(row_counts_dict.values()) == 2 and self.length - 1 in list(
-                                    row_counts_dict.values()) and self.star_string not in list(row_counts_dict.keys())):
+                                row_counts_dict.values()) and self.star_string not in list(row_counts_dict.keys())):
                                 for entry in field:
                                     if entry[1][0] == row[1][0] and entry[2]:
                                         entry[0] = "-"
