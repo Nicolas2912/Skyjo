@@ -9,6 +9,7 @@ from Game.environment import Environment
 from scipy.stats import norm
 
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 import random, time, copy
 
@@ -369,17 +370,21 @@ class Game2:
 
     def start_agents(self, output: bool = True):
         if len(self.env.agents) > 0 and len(self.env.players) == 0:
+            probs = []
 
             if output:
                 print("Starting Skyjo!")
 
             for agent_name, agent in self.env.agents.items():
-                legal_positions = self.env.legal_positions()
+                legal_positions = self.env.legal_positions(player_name=agent_name)
 
                 if isinstance(agent, RandomAgent2):
                     pos1, pos2 = agent.flip_cards_start(legal_positions, output)
                     self.env.execute_action(agent, "flip card", pos1, output)
                     self.env.execute_action(agent, "flip card", pos2, output)
+                    prob = self.env.state["probabilities"]
+                    probs.append(prob)
+
                     if output:
                         self.env.print_game_field()
 
@@ -387,6 +392,9 @@ class Game2:
                     pos1, pos2 = agent.flip_cards_start(legal_positions, self.env, output)
                     self.env.execute_action(agent, "flip card", pos1, output)
                     self.env.execute_action(agent, "flip card", pos2, output)
+                    prob = self.env.calc_probabilities()
+                    probs.append(prob)
+
                     if output:
                         self.env.print_game_field()
 
@@ -415,7 +423,10 @@ class Game2:
             raise ValueError(
                 f"There must be at least one agent and no players! \nAgent: {self.env.agents}\nPlayer: {self.env.players}")
 
+        return probs
+
     def turn_agents(self, agent_name, output: bool = True):
+        probs = []
         if len(self.env.agents) > 0 and len(self.env.players) == 0:
 
             if output:
@@ -438,31 +449,43 @@ class Game2:
                 pos = agent.choose_random_position(legal_positions, output)
                 self.env.execute_action(self.env.agents[agent_name], action, pos, output)
 
+                prob = self.env.calc_probabilities()
+
                 if output:
                     self.env.print_game_field()
 
             elif isinstance(agent, ReflexAgent2):
 
                 action, action1, pos = agent.perform_action(self.env)
+                # TODO: Here the pos is unfortunately not a valid one, although I check all valid positions in perform action
                 self.env.execute_action(self.env.agents[agent_name], action, None, output)
                 self.env.execute_action(self.env.agents[agent_name], action1, pos, output)
+
+                prob = self.env.calc_probabilities()
 
                 if output:
                     print(f"Agent {agent_name} performed action {action} and {action1} at position {pos}!")
                     self.env.print_game_field()
 
-    def run_agents(self, output: bool = True):
+        return prob
+
+    def run_agents(self, output: bool = True, end_output: bool = True):
         end_agents = False
         end = False
+        probs = []
 
         while not self.end:
 
             for agent_name in self.player_turn_order:
-                self.turn_agents(agent_name, output)
+                print(f"legal positions: {self.env.legal_positions(player_name=agent_name)}")
+                prob_turn = self.turn_agents(agent_name, output)
+                # print heatmap animated of probabilities after every turn
+                probs.append(prob_turn)
+
                 end, name = self.env.gamefield.check_end()
 
                 if end and name in self.player_turn_order:
-                    if output:
+                    if output and not end_output:
                         print(f"Agent {name} ended the game. Everyone else has one more turn!")
                     self.player_turn_order.remove(name.strip())
                     end_agents = True
@@ -470,15 +493,20 @@ class Game2:
 
             if end_agents:
                 for agent_name in self.player_turn_order:
-                    self.turn_agents(agent_name, output)
+                    prob_turn = self.turn_agents(agent_name, output)
+                    probs.append(prob_turn)
 
                     end, name = self.env.gamefield.check_end()
 
             if end and end_agents:
                 self.end = True
                 self.__flip_all_cards()
-                if output:
+                probs_end = self.env.calc_probabilities()
+                probs.append(probs_end)
+                if not output and end_output:
                     print("Final board:\n", self.env.gamefield)
+                    # print(f"Final probabilities: {probs}")
+                    print("-" * 50)
                 break
 
         if output:
@@ -501,7 +529,7 @@ class Game2:
 
             print("=" * 50)
 
-        return card_sum
+        return card_sum, probs
 
 
 class Simulation:
@@ -510,12 +538,13 @@ class Simulation:
         self.agent_names = agent_names
         self.agents = []
 
-    def simulate_agent_games(self, n: int, output: bool = True):
+    def simulate_agent_games(self, n: int, output: bool = True, end_output: bool = True):
 
         start_simulation = time.time()
 
-        overall_results = {"RandomAgent": [], "ReflexAgent": []}
+        overall_results = {name: [] for name in self.agent_names}
         time_results = []
+        probs = []
 
         for _ in tqdm(range(n)):
             carddeck = Carddeck()
@@ -533,11 +562,17 @@ class Simulation:
             environment = Environment(gamefield)
             game = Game2(environment)
 
-            game.start_agents(output)
+            probs_start = game.start_agents(output)
+            probs.append(probs_start)
 
-            result = game.run_agents(output)
-            overall_results["RandomAgent"].append(result["RandomAgent"])
-            overall_results["ReflexAgent"].append(result["ReflexAgent"])
+            result, probs_turn = game.run_agents(output, end_output)
+
+            agent_names_result = list(result.keys())
+            for agent_name in self.agent_names:
+                if agent_name in agent_names_result:
+                    overall_results[agent_name].append(result[agent_name])
+
+            probs.append(probs_turn)
             time_elapsed_simulation = time.time() - start_simulation
             time_results.append(time_elapsed_simulation)
 
@@ -545,93 +580,163 @@ class Simulation:
 
         # plot histogram
         # Histogram
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        # fig, axs = plt.subplots(1, 4, figsize=(10, 5))
+        #
+        # for agent_name, results in overall_results.items():
+        #     if agent_name == "RandomAgent":
+        #         color = "blue"
+        #         label = "RandomAgent results"
+        #     elif agent_name == "ReflexAgent":
+        #         color = "orange"
+        #         label = "ReflexAgent results"
+        #
+        #     n, bins, _ = axs[0].hist(results, bins=20, label=f"{label}", color=color, edgecolor='black')
+        #     axs[0].legend(loc='upper right')
+        #
+        #     mean, std = np.mean(results), np.std(results)
+        #
+        #     print(f"Agent: {agent_name}")
+        #     print(f"Mean: {mean:.2f}, Std: {std:.2f}")
+        #
+        #     # plot pdf
+        #     x = np.linspace(min(results), max(results), 1000)
+        #     p = norm.pdf(x, mean, std)
+        #     p *= n.max() / p.max()
+        #
+        #     axs[0].plot(x, p, linewidth=4, label=f'Normal Distribution {agent_name}', color="black")
+        #
+        # axs[0].set_xlabel("Sum of cards")
+        # axs[0].set_ylabel("Frequency")
+        # axs[0].set_title("Agent performance")
+        #
+        # # Pie-Chart
+        # points_random = overall_results["RandomAgent"]
+        # points_reflex = overall_results["ReflexAgent"]
+        #
+        # winnings = {"RandomAgent": 0, "ReflexAgent": 0, "Draw": 0}
+        #
+        # for p_random, p_reflex in zip(points_random, points_reflex):
+        #     if p_random < p_reflex:
+        #         winnings["RandomAgent"] += 1
+        #     elif p_random > p_reflex:
+        #         winnings["ReflexAgent"] += 1
+        #     else:
+        #         winnings["Draw"] += 1
+        #
+        # labels = winnings.keys()
+        # values = winnings.values()
+        #
+        # axs[1].pie(values, labels=labels, autopct='%1.1f%%', startangle=90,
+        #            colors=['blue', 'orange', 'lightcoral'])
+        #
+        # axs[1].set_title("Agent winnings")
+        #
+        # probs_all = probs[0] + probs[1]
+        #
+        # probs_new = {}
+        # for dic in probs_all:
+        #     for key, value in dic.items():
+        #         if key in probs_new.keys():
+        #             probs_new[key].append(value)
+        #         else:
+        #             probs_new[key] = []
+        #             probs_new[key].append(value)
+        #
+        # # Extrahiere die eindeutigen Keys und die Werte für den ersten Zeitpunkt
+        # keys = list(probs_new.keys())
+        # current_values = [probs_new[key] for key in keys]
+        # mean_values = [np.mean(probs_new[key]) for key in keys]
+        # heatmap = axs[2].imshow(np.array(current_values).T, cmap='jet', interpolation='nearest', aspect='auto',
+        #                     animated=True)
+        #
+        # # bar plot of mean values
+        # axs[3].bar(keys, mean_values, color="brown", edgecolor="black")
+        #
+        # # heatmap_mean = axs[3].imshow(np.array(mean_values).T, cmap='jet', interpolation='nearest', aspect='auto',
+        # #                     animated=True)
+        #
+        # # Beschriftungen hinzufügen
+        # axs[2].set_xlabel('Keys')
+        # axs[2].set_ylabel('Zeitpunkt')
+        # axs[2].set_title('Animierte Heatmap der Daten aus probs_new')
+        #
+        # # Setze die x-Ticks, um alle Keys anzuzeigen
+        # axs[2].set_xticks(np.arange(len(keys)))
+        # axs[2].set_xticklabels(keys)
+        #
+        # every_n = 50
+        # y_ticks_positions = np.arange(0, len(max(current_values, key=len)), every_n)
+        # axs[2].set_yticks(y_ticks_positions)
+        # axs[2].set_yticklabels(np.arange(0, len(max(current_values, key=len)), every_n))
+        #
+        # # add colorbar
+        # fig.colorbar(heatmap, ax=axs[2])
+        #
+        # # Funktion für die Animation
+        # def update(frame):
+        #     current_values = [probs_new[key][:frame + 1] for key in keys]
+        #     heatmap.set_array(np.array(current_values).T)
+        #     return heatmap,
+        #
+        # # Erstelle die Animation
+        # # animation = FuncAnimation(fig, update, frames=len(max(current_values, key=len)), interval=100, repeat=False)
+        #
+        # plt.show()
 
-        for agent_name, results in overall_results.items():
-            if agent_name == "RandomAgent":
-                color = "blue"
-                label = "RandomAgent results"
-            elif agent_name == "ReflexAgent":
-                color = "orange"
-                label = "ReflexAgent results"
+        fig2, axs2 = plt.subplots(nrows=1, ncols=3)
 
-            n, bins, _ = axs[0].hist(results, bins=20, label=f"{label}", color=color, edgecolor='black')
-            axs[0].legend(loc='upper right')
+        probs_all = []
+        for i in range(len(probs)):
+            probs_all.extend(probs[i])
 
-            mean, std = np.mean(results), np.std(results)
+        probs_new = {}
+        for dic in probs_all:
+            for key, value in dic.items():
+                if key in probs_new.keys():
+                    probs_new[key].append(value)
+                else:
+                    probs_new[key] = []
+                    probs_new[key].append(value)
 
-            print(f"Agent: {agent_name}")
-            print(f"Mean: {mean:.2f}, Std: {std:.2f}")
+        # Extrahiere die eindeutigen Keys und die Werte für den ersten Zeitpunkt
+        keys = list(probs_new.keys())
+        keys = sorted(keys)
+        current_values = [probs_new[key] for key in keys]
+        mean_values = [np.mean(probs_new[key]) for key in keys]
 
-            # plot pdf
-            x = np.linspace(min(results), max(results), 1000)
-            p = norm.pdf(x, mean, std)
-            p *= n.max() / p.max()
+        heatmap = axs2[0].imshow(np.array(current_values).T, cmap='jet', interpolation='nearest', aspect='auto',
+                              animated=True)
 
-            axs[0].plot(x, p, linewidth=4, label=f'Normal Distribution {agent_name}', color="black")
+        # set x ticks
+        axs2[0].set_xticks(np.arange(len(keys)))
+        axs2[0].set_xticklabels(keys)
 
-        axs[0].set_xlabel("Sum of cards")
-        axs[0].set_ylabel("Frequency")
-        axs[0].set_title("Agent performance")
+        # text in plot
+        # for i in range(len(keys)):
+        #     for j in range(len(current_values[i])):
+        #         axs2.text(i, j, f"{current_values[i][j]:.5f}", ha="center", va="center", color="black")
 
-        # Pie-Chart
-        points_random = overall_results["RandomAgent"]
-        points_reflex = overall_results["ReflexAgent"]
+        fig2.colorbar(heatmap, ax=axs2[0])
 
-        winnings = {"RandomAgent": 0, "ReflexAgent": 0, "Draw": 0}
+        # bar chart of mean of probabilities
+        axs2[1].bar(keys, mean_values, color="brown", edgecolor="black")
 
-        for p_random, p_reflex in zip(points_random, points_reflex):
-            if p_random < p_reflex:
-                winnings["RandomAgent"] += 1
-            elif p_random > p_reflex:
-                winnings["ReflexAgent"] += 1
-            else:
-                winnings["Draw"] += 1
+        # set x ticks
+        axs2[1].set_xticks(np.arange(len(keys)))
+        axs2[1].set_xticklabels(keys)
 
-        labels = winnings.keys()
-        values = winnings.values()
+        # set x label
+        axs2[1].set_xlabel("Cards")
+        axs2[1].set_ylabel("Mean of probabilities")
 
-        axs[1].pie(values, labels=labels, autopct='%1.1f%%', startangle=90,
-                   colors=['blue', 'orange', 'lightcoral'])
+        # set title
+        axs2[0].set_title("Heatmap of probabilities")
+        axs2[1].set_title("Mean of probabilities")
 
-        axs[1].set_title("Agent winnings")
+        axs2[2].boxplot(current_values, labels=keys, vert=True, patch_artist=True)
 
         plt.show()
 
-
-def simulate_agent_games_parallel(self, n):
-    results = []
-    run_times = []
-
-    with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(self.simulate_single_game) for _ in tqdm(range(n))]
-
-        for future in tqdm(as_completed(futures), total=n):
-            result, run_time = future.result()
-            results.append(result)
-            run_times.append(run_time)
-
-        # plot histogram
-        n, bins, _ = plt.hist(results, bins=50, label=f"Agent results")
-
-        mean, std = np.mean(results), np.std(results)
-
-        print(f"Mean: {mean:.2f}, Std: {std:.2f}")
-
-        # plot pdf
-        x = np.linspace(min(results), max(results), 1000)
-        p = norm.pdf(x, mean, std)
-        p *= n.max() / p.max()
-        plt.plot(x, p, 'k', linewidth=2)
-
-        plt.plot(x, p, 'k', linewidth=2, label='Normal Distribution')
-
-        plt.xlabel("Sum of cards")
-        plt.ylabel("Frequency")
-        plt.title("Agent performance")
-        plt.show()
-
-    return results, run_times
 
 
 if __name__ == "__main__":
@@ -648,5 +753,5 @@ if __name__ == "__main__":
     # game.start_agents(True)
     # game.run_agents()
 
-    S = Simulation(["ReflexAgent", "RandomAgent"])
-    S.simulate_agent_games(1000, False)
+    S = Simulation(["ReflexAgent"])
+    S.simulate_agent_games(1000, True, True)
