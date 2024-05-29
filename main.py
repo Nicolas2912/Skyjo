@@ -449,7 +449,7 @@ class Game2:
                 pos = agent.choose_random_position(legal_positions, output)
                 self.env.execute_action(self.env.agents[agent_name], action, pos, output)
 
-                prob = self.env.calc_probabilities()
+                prob = self.env.state["probabilities"]
 
                 if output:
                     self.env.print_game_field()
@@ -457,11 +457,10 @@ class Game2:
             elif isinstance(agent, ReflexAgent2):
 
                 action, action1, pos = agent.perform_action(self.env)
-                # TODO: Here the pos is unfortunately not a valid one, although I check all valid positions in perform action
                 self.env.execute_action(self.env.agents[agent_name], action, None, output)
                 self.env.execute_action(self.env.agents[agent_name], action1, pos, output)
 
-                prob = self.env.calc_probabilities()
+                prob = self.env.state["probabilities"]
 
                 if output:
                     print(f"Agent {agent_name} performed action {action} and {action1} at position {pos}!")
@@ -477,7 +476,6 @@ class Game2:
         while not self.end:
 
             for agent_name in self.player_turn_order:
-                print(f"legal positions: {self.env.legal_positions(player_name=agent_name)}")
                 prob_turn = self.turn_agents(agent_name, output)
                 # print heatmap animated of probabilities after every turn
                 probs.append(prob_turn)
@@ -705,7 +703,7 @@ class Simulation:
         mean_values = [np.mean(probs_new[key]) for key in keys]
 
         heatmap = axs2[0].imshow(np.array(current_values).T, cmap='jet', interpolation='nearest', aspect='auto',
-                              animated=True)
+                                 animated=True)
 
         # set x ticks
         axs2[0].set_xticks(np.arange(len(keys)))
@@ -738,7 +736,6 @@ class Simulation:
         plt.show()
 
 
-
 if __name__ == "__main__":
     # carddeck = Carddeck()
     # player = Player("Nicolas", carddeck, (4, 3))
@@ -753,5 +750,5 @@ if __name__ == "__main__":
     # game.start_agents(True)
     # game.run_agents()
 
-    S = Simulation(["ReflexAgent"])
-    S.simulate_agent_games(1000, True, True)
+    S = Simulation(["ReflexAgent", "ReflexAgent"])
+    S.simulate_agent_games(1000, False, False)
