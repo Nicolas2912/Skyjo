@@ -87,7 +87,7 @@ Modelling:
 
 4. Player order is [a, b, c]. What if b ended the game? Everyone else has exactly one turn. How to handle that?
 
-5. If star is pulled from the deck and changed with card on field player can chosse a value for this card but only for this round. If this value completes a row/column with all the same numbers the row/column will be deleted (set to "-") till the end.
+5. If star is pulled from the deck and changed with card on field player can choose a value for this card but only for this round. If this value completes a row/column with all the same numbers the row/column will be deleted (set to "-") till the end.
 
 	And: If star is flipped on the field, the player can also choose a value for this card for this round. If this value completes a row/column with all the same numbers the row/column will be deleted (set to "-") till the end.
 
@@ -123,4 +123,42 @@ Modelling:
     Else put card on discard stack and turn around one card on the field next to a card that is already flipped.
     If card is same with a card on field that is flipped, put card next to it in order to get a row/column that will be then deleted if row/column is full.
 
+9. How do I model the state?
+
+    9.1) What information do I have?
+
+        - Cards visible on the board (mine as well as all the visible cards from any other players)
+        - Distribution of cards and frequency in the whole card deck --> Probabilities
+        - Actions of the other players in the past (is that really important)
+            -- Maybe important to adapt own strategy based on the strategy of other players --> more important in the
+                action variant of Skyjo where players interact more with each other
+            -- Maybe to learn strategy from other players
+
+    9.2) How do I combine all these information in a single state so it is useful?
+
+        - Dictionary?
+        - Array?
+
+10. How do I model the actions and the actions_space?
+
+        10.1) What are the actions?
+
+            - Pull a card from the deck
+            - Pull a card from the discard stack
+            - Change a card on the field with a card from the deck
+            - Change a card on the field with a card from the discard stack
+            - Put card on discard stack and turn around one card on your field
+            - Put card on discard stack and turn around one card on your field next to a card that is already flipped
+
+            At the beginning I have to choose two positions for flipping the cards. Model has to learn what positions
+            to pick, even though it's totally random.
+
+        10.2) How do I model the actions_space?
+
+            Positions:
+                - (0,0) --> 1; (0,1) --> 2; (0,2) --> 3; (0,3) --> 4; (1,0) --> 5; (1,1) --> 6; ...
+                - choose row number --> one number/action; choose column number --> one number/action
+
+            Actions:
+                - Dictionary {0: "pull deck", 1: "pull discard", 2: "change deck", 3: "change discard", 4: "put discard stack"}
 
