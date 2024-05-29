@@ -123,13 +123,13 @@ class ReflexAgent2(Carddeck):
         card_mapping = self.card_value_mapping
         cards_flipped = {}
         for entry in field:
-            if entry[2]:
+            if entry[2] and entry[0] != "-":
                 cards_flipped[entry[1]] = card_mapping[str(entry[0])]
 
         card_threshold = 4
 
         # check if card on discard stack is lower than cards flipped
-        if card_mapping[str(discard_stack[-1])] < int(max(cards_flipped.values())):
+        if len(cards_flipped) > 0 and card_mapping[str(discard_stack[-1])] < int(max(cards_flipped.values())):
             action = "pull discard"
             action1 = "change card"
             pos_max = max(cards_flipped, key=cards_flipped.get)
@@ -205,7 +205,7 @@ class ReflexAgent2(Carddeck):
             for pos, value in cards_flipped.items():
                 cards_flipped[pos] = card_mapping[str(value)]
 
-            if card_mapping[str(card_on_hand_future)] < max(cards_flipped.values()):
+            if len(cards_flipped) > 0 and card_mapping[str(card_on_hand_future)] < max(cards_flipped.values()):
                 action1 = "change card"
                 pos_max = max(cards_flipped, key=cards_flipped.get)
                 return action, action1, pos_max
