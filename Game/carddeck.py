@@ -3,7 +3,7 @@ from collections import Counter
 
 import random, time
 
-random.seed(7)
+# random.seed(7)
 
 
 class Carddeck:
