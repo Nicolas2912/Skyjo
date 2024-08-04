@@ -162,3 +162,8 @@ Modelling:
             Actions:
                 - Dictionary {0: "pull deck", 1: "pull discard", 2: "change deck", 3: "change discard", 4: "put discard stack"}
 
+            Modelling:
+                - Different action spaces (dimensions) for different phases of the game but I can do it simpler.
+                - Just one action space (dimension) for the whole game and the model learns by itself to take valid
+                actions because it gets a reward e.g. of -1 if it takes an invalid action. Also stop ealy if it takes
+                too many invalid actions.
