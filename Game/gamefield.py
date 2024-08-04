@@ -109,10 +109,11 @@ class GameField:
                 print(f"Card flipped at position {position}")
 
         while not flipped:
-            print(f"Card already flipped at position {position} or invalid input!")
-            new_position = input(f"Enter new position: (x,y):")
-            new_position = eval(new_position)
-            flipped = flip_card_on_field_helper(player, new_position)
+            if isinstance(player, Player):
+                print(f"Card already flipped at position {position} or invalid input!")
+                new_position = input(f"Enter new position: (x,y):")
+                new_position = eval(new_position)
+                flipped = flip_card_on_field_helper(player, new_position)
 
     def change_card_with_card_on_hand(self, player, position: tuple):
         if player.card_on_hand is None:
@@ -211,8 +212,8 @@ class GameField:
                     return True, name
         return False, None
 
-    def reset(self):
-        self.__init__(self.length, self.height, self.players_list, self.carddeck)
+    def reset(self, carddeck):
+        self.__init__(self.length, self.height, self.players_list, carddeck)
 
     def __str__(self):
         self.check_full_line()
