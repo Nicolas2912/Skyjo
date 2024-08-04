@@ -7,7 +7,8 @@ import random, time
 
 
 class Carddeck:
-    def __init__(self):
+    def __init__(self, seed: int = 7):
+        random.seed(seed)
         self.cards = self.init_carddeck()
         self.discard_stack = [self.cards.pop(0)]
         self.all_cards = self.cards + self.discard_stack

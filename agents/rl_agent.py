@@ -2,11 +2,15 @@ from Game.carddeck import Carddeck
 
 import random
 
+# random.seed(7)
+
 class RLAgent(Carddeck):
 
-    def __init__(self, name: str, carddeck: Carddeck, game_field_dimensions: tuple):
+    def __init__(self, name: str, carddeck: Carddeck, game_field_dimensions: tuple, seed: int = 7):
         super().__init__()
         self.name = name
+
+        random.seed(seed)
 
         self.player_cards = random.sample(carddeck.cards, game_field_dimensions[0] * game_field_dimensions[1])
 
@@ -57,6 +61,7 @@ class RLAgent(Carddeck):
             card_on_hand = carddeck.cards[0]
         except Exception as e:
             print(carddeck.cards)
+
         carddeck.cards.remove(card_on_hand)
         self.card_on_hand = card_on_hand
         if output:
