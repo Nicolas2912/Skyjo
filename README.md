@@ -1,0 +1,3 @@
+# Python implementation of the card game "Skyjo" and a RL-Agent
+
+Work in progress ...
