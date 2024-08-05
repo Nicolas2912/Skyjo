@@ -12,11 +12,12 @@ import copy
 from collections import Counter
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 from stable_baselines3.common.utils import set_random_seed
 print(torch.cuda.is_available())
 
-set_random_seed(7)
+#set_random_seed(7)
 
 # check cuda device
 
@@ -417,7 +418,7 @@ class RLEnvironment(gym.Env):
         self.max_discard_stack_length = 9999
 
         self.observation_space = gym.spaces.Dict({
-            "field": gym.spaces.Box(low=-2, high=14, shape=(self.height, self.length), dtype=int, seed=self.seed),
+            "field": gym.spaces.Box(low=-2, high=15, shape=(self.height, self.length), dtype=int, seed=self.seed),
             "discard_stack": gym.spaces.Box(low=-3, high=13, shape=(self.max_discard_stack_length,), dtype=int,
                                             seed=self.seed),
             "probabilities": gym.spaces.Box(low=0, high=1, shape=(16,), dtype=float, seed=self.seed),
@@ -430,6 +431,10 @@ class RLEnvironment(gym.Env):
         self.pull_discard = False
         self.change_card = False
         self.put_discard = False
+
+        self.count_wrong_actions = 0
+        self.count_wrong_actions_history = []
+        self.reward_history = []
 
     def _transform_state(self, state):
         new_state = {}
@@ -445,6 +450,8 @@ class RLEnvironment(gym.Env):
                         card_value = 14  # Use 14 to represent hidden cards
                     elif card_value == "\u2666":  # Convert diamond symbol to 13
                         card_value = 13
+                    elif card_value == "-": # convert special character to 15
+                        card_value = 15
                     new_state[key]["field"].append(card_value)
                 last_action = field_state["last_action"]
                 new_state[key]["last_action"] = last_action
@@ -531,6 +538,8 @@ class RLEnvironment(gym.Env):
     def step(self, action):
         reward = 0
         done = False
+        correct_action_reward = 10
+        false_action_reward = 5
 
         every_card_hidden = self._check_every_card_hidden()
         self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
@@ -560,8 +569,12 @@ class RLEnvironment(gym.Env):
                 # get current state
                 state = self.skyjo_env.state
                 self.state = self._transform_state(state)
+                reward += correct_action_reward
             else:
-                reward -= 1
+                self.count_wrong_actions += 1
+                penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                reward += penalty
 
         elif self.game_state == "beginning" and not every_card_hidden:
             if action in range(12):
@@ -583,14 +596,20 @@ class RLEnvironment(gym.Env):
                     # get current state
                     state = self.skyjo_env.state
                     self.state = self._transform_state(state)
-                    reward += 0.1
+                    reward += correct_action_reward
 
                     beginning_phase_finished = True
 
                 else:
-                    reward -= 1
+                    self.count_wrong_actions += 1
+                    penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                    reward += penalty
             else:
-                reward -= 1
+                self.count_wrong_actions += 1
+                penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                reward += penalty
 
         elif self.game_state == "running":
             action_actionname_mapping, actionname_action_mapping = self._action_mapping()
@@ -611,12 +630,15 @@ class RLEnvironment(gym.Env):
                     self.state = self._transform_state(skyjo_env_copy.state)
 
                     self.pull_deck = True
-                    reward += 1
+                    reward += correct_action_reward
                 if action == actionname_action_mapping["pull_discard"]:
                     # check if discard stack is empty
                     discard_stack = self.skyjo_env.carddeck.discard_stack
                     if len(discard_stack) == 0:
-                        reward -= 1
+                        self.count_wrong_actions += 1
+                        penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                        reward += penalty
                     else:
                         # update state
                         skyjo_env_copy = copy.deepcopy(self.skyjo_env)
@@ -626,21 +648,27 @@ class RLEnvironment(gym.Env):
                         self.state = self._transform_state(skyjo_env_copy.state)
 
                         self.pull_discard = True
-                        reward += 1
+                        reward += correct_action_reward
             else:
-                reward -= 1
+                self.count_wrong_actions += 1
+                penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                reward += penalty
 
             if action in [actionname_action_mapping["change"], actionname_action_mapping["put_discard"]] and (
                     self.pull_deck or self.pull_discard):
                 if action == actionname_action_mapping["change"]:
                     self.change_card = True
-                    reward += 1
+                    reward += correct_action_reward
                 if action == actionname_action_mapping["put_discard"]:
                     self.put_discard = True
-                    reward += 1
+                    reward += correct_action_reward
 
                 else:
-                    reward -= 1
+                    self.count_wrong_actions += 1
+                    penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                    reward += penalty
 
             # pull deck & change card
             if action_actionname_mapping[action] == 'position' and (self.pull_deck and self.change_card):
@@ -662,9 +690,12 @@ class RLEnvironment(gym.Env):
 
                     state = self.skyjo_env.state
                     self.state = self._transform_state(state)
-                    reward += 1
+                    reward += correct_action_reward
                 else:
-                    reward -= 1
+                    self.count_wrong_actions += 1
+                    penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                    reward += penalty
 
             # pull deck & put discard
             if action_actionname_mapping[action] == 'position' and (self.pull_deck and self.put_discard):
@@ -686,9 +717,12 @@ class RLEnvironment(gym.Env):
 
                     state = self.skyjo_env.state
                     self.state = self._transform_state(state)
-                    reward += 1
+                    reward += correct_action_reward
                 else:
-                    reward -= 1
+                    self.count_wrong_actions += 1
+                    penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                    reward += penalty
 
             # pull discard & change card
             if action_actionname_mapping[action] == 'position' and (self.pull_discard and self.change_card):
@@ -709,15 +743,39 @@ class RLEnvironment(gym.Env):
 
                     state = self.skyjo_env.state
                     self.state = self._transform_state(state)
-                    reward += 1
+                    reward += correct_action_reward
                 else:
-                    reward -= 1
+                    self.count_wrong_actions += 1
+                    penalty = -1 * (self.count_wrong_actions + 1) * false_action_reward
+
+                    reward += penalty
 
         elif self.game_state == "finished":
             # print("Game is finished!")
             done = True
-            reward += 5
             truncated = False
+
+            # print("Final board:")
+            # self.skyjo_env.print_game_field()
+            if self.count_wrong_actions <= 10:
+                reward += 1000
+            if self.count_wrong_actions > 80:
+                reward -= 50
+
+            if len(self.count_wrong_actions_history) > 0:
+                if self.count_wrong_actions <= min(self.count_wrong_actions_history):
+                    reward += 10
+                if self.count_wrong_actions >= max(self.count_wrong_actions_history):
+                    reward -= 10
+                if self.count_wrong_actions < self.count_wrong_actions_history[-1]:
+                    reward += 5
+                if self.count_wrong_actions >= self.count_wrong_actions_history[-1]:
+                    reward -= 5
+
+            self.reward_history.append(reward)
+            print(f"Number of wrong actions: {self.count_wrong_actions}")
+            self.count_wrong_actions_history.append(self.count_wrong_actions)
+            self.count_wrong_actions = 0
 
             return self.state, reward, done, truncated, {}
 
@@ -726,7 +784,7 @@ class RLEnvironment(gym.Env):
 
         truncated = False
 
-        field = np.array(self.state[self.rl_name]["field"], dtype=int) # fix this: ValueError: invalid literal for int() with base 10: '-'
+        field = np.array(self.state[self.rl_name]["field"], dtype=str) # fix this: ValueError: invalid literal for int() with base 10: '-'
 
         probabilities = list()
         for prob in self.skyjo_env.state["probabilities"].values():
@@ -746,6 +804,7 @@ class RLEnvironment(gym.Env):
         return state, reward, done, truncated, {}
 
     def reset(self, seed=None):
+        # print("reset")
         self.pull_deck = False
         self.pull_discard = False
         self.change_card = False
@@ -784,7 +843,7 @@ class RLEnvironment(gym.Env):
         self.state = self._transform_state(self.skyjo_env.state)
 
         reset_state = {
-            "field": np.array(field),
+            "field": field,
             "discard_stack": np.array(discard_stack_new),
             "probabilities": probabilities
         }
@@ -799,10 +858,20 @@ if __name__ == "__main__":
     # player1 = Player("Player1", carddeck, (4, 3))
 
     gamefield = GameField(4, 3, [agent1], carddeck)
-    env = Environment(gamefield, seed=seed)
+    env = Environment(gamefield)
 
-    rl_env = RLEnvironment(env, seed=seed)
+    rl_env = RLEnvironment(env)
 
     model = PPO("MultiInputPolicy", rl_env, verbose=1, device='cuda')
     print(f"Model on device: {model.device}")
-    model.learn(total_timesteps=50000, progress_bar=True)
+    model.learn(total_timesteps=10000, progress_bar=True)
+
+    count_wrong_actions_history = rl_env.count_wrong_actions_history
+    plt.plot(count_wrong_actions_history, "-o")
+    plt.grid()
+    plt.show()
+
+    reward_history = rl_env.reward_history
+    plt.plot(reward_history, "-o")
+    plt.grid()
+    plt.show()
