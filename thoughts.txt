@@ -100,9 +100,9 @@ Modelling:
         a2. Put card on discard stack and turn around one card on your field
     b. Pull a card from the discard stack
         a1. Change a card on the field with a card from the deck
-        a2. Put card on discard stack and turn around one card on your field
+        a2. Put card on discard stack and turn around one card on your field (makes no sense)
 
-    => 4 different actions overall
+    => 4 (3) different actions overall
 
     How to model these actions?
 
@@ -167,3 +167,52 @@ Modelling:
                 - Just one action space (dimension) for the whole game and the model learns by itself to take valid
                 actions because it gets a reward e.g. of -1 if it takes an invalid action. Also stop ealy if it takes
                 too many invalid actions.
+
+    11. Observations of learning valid actions:
+
+        - Slow learning process. Model takes way too many invalid actions.
+        - Solution while maintaining the same action space: Develop a very sophisticated reward shaping for this in
+        order to improve learning.
+
+        11.1) Why do I have implemented this at all?
+
+            - Before I implemented this way, I thought and tried to make the action space dynamic based on the game
+            situation, but I thought that would be too complicated. So I decided to make it simple and just have one
+            action space for the whole game. Also my approach doesn't worked as expected. Thats also before I knew about
+            'MaskableActorCriticPolicy' and 'MaskableMultiInputActorCriticPolicy' classes of stable-baselines3.
+            (https://sb3-contrib.readthedocs.io/en/master/modules/ppo_mask.html)
+
+        11.2) Modelling valid actions based on the last actions:
+
+            - In the 'Beginning'-Phase I can ...
+                1. Flip a card at position (x,y)
+                2. FLip a second card at position (x',y') where x' and y' are different from x and y
+
+            - In the 'Running'-Phase I can ..
+                1. Pull a card from the deck
+                    a. Change a card on the field with a card from the deck
+                    b. Put card on discard stack and turn around one card on my field
+                2. Pull a card from the discard stack
+                    a. Change a card on the field with a card from the discard stack
+
+            - Valid actions are dependent on the last action.
+
+            - Valid actions based on the last action:
+                - 'Beginning Phase':
+                    1. Last Action: None --> Action: Flip a card at position (x,y)
+                    2. Last Action: Flip a card at position (x,y) --> Action: Flip a second card at position (x',y') where x' and y' are different from x and y
+                - 'Running Phase':
+                    3. Last Action: Flip card at position (x',y') --> Action: Pull card from deck or pull card from discard stack
+                    4. Last action: Pull card from deck --> Action: Change card or put on discard stack and flip card that is not already flipped.
+                    5. Last action: Pull card from discard stack --> Action: Change card with card from discard stack.
+
+            - How to model valid actions based on last action?
+
+                -
+
+Appendix:
+
+    Ideas:
+        - One hot encoding for the field. One for position, one for value, one for hidden or visible
+        - Also one hot encoding for last actions?
+
