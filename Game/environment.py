@@ -5,9 +5,11 @@ from Game.carddeck import Carddeck
 from Game.gamefield import GameField
 from agents.rl_agent import RLAgent
 import gymnasium as gym
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC, DQN, A2C, HER
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.callbacks import BaseCallback
+
+from sb3_contrib import MaskablePPO
 
 import copy
 from collections import Counter
@@ -16,6 +18,7 @@ import torch
 import matplotlib.pyplot as plt
 
 from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.noise import NormalActionNoise
 print(torch.cuda.is_available())
 
 set_random_seed(7)
@@ -444,7 +447,7 @@ class RLEnvironment(gym.Env):
         #     dtype=np.int32
         # )
 
-        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(12*18+5,), dtype=np.int32)
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(12 * 18 + 5,), dtype=np.float32)
 
         # define variables for actions
         # define variables
@@ -466,6 +469,9 @@ class RLEnvironment(gym.Env):
 
         self.all_actions = [-1 for _ in range(self.last_action_padding)]
         self.last_n_actions = [[0,0,0,0,0] for _ in range(self.n_last_actions)]
+
+        self.all_last_actions = set()
+
 
     def _transform_state(self, state):
         new_state = {}
@@ -595,6 +601,57 @@ class RLEnvironment(gym.Env):
                                    "pull discard": [0,0,0,1,0], "change card": [0,0,0,0,1]}
             return last_action_mapping[last_action]
 
+
+    def action_masks(self):
+        legal_actions = self._legal_actions()
+        all_actions = self.skyjo_env.all_actions()
+        field = self.state[self.rl_name]["field"].astype(str)
+        legal_positions = self._legal_positions(field)
+        last_action = self.state[self.rl_name]["last_action"]
+        state_of_game = self.state[self.rl_name]["state_of_game"]
+
+        # TODO: Berücksichtige hier auch noch den state_of_game!
+
+        if last_action is None:
+            action_mask = [True for _ in range(12)]
+            action_mask_false = [False for _ in range(4)]
+            action_mask.extend(action_mask_false)
+            return action_mask
+
+        if last_action == "flip card":
+            action_mask = [False for _ in range(16)]
+            action_mask[12] = True
+            action_mask[13] = True
+            return action_mask
+
+        if last_action == "pull deck":
+            action_mask = [False for _ in range(16)]
+            action_mask[14] = True
+            action_mask[15] = True
+            return action_mask
+
+        if last_action == "change card" or last_action == "put discard":
+            position_action_mapping = self._position_action_mapping()
+            valid_positions = [position_action_mapping[pos] for pos in legal_positions]
+            action_mask = [False for _ in range(12)]
+            for pos in valid_positions:
+                action_mask[pos] = True
+            action_mask_false = [False for _ in range(4)]
+            action_mask.extend(action_mask_false)
+
+            return action_mask
+
+        if last_action == "pull discard":
+            action_mask = [False for _ in range(16)]
+            action_mask[14] = True
+            return action_mask
+
+
+
+
+
+
+
     def step(self, action):
         self.iteration += 1
         self.total_actions_taken += 1
@@ -611,6 +668,8 @@ class RLEnvironment(gym.Env):
 
         # check last action
         last_action = self.state[self.rl_name]["last_action"]
+
+        self.all_last_actions.add(last_action)
 
         if last_action == "pull discard":
             self.change_card = True
@@ -725,7 +784,7 @@ class RLEnvironment(gym.Env):
 
             # pull deck & change card
             if action_actionname_mapping[action] == 'position' and (self.pull_deck and self.change_card):
-                legal_positions = self._legal_positions(self.state[self.rl_name]["field"])
+                legal_positions = self._legal_positions(self.state[self.rl_name]["field"].astype(str))
                 position = self.action_position_mapping[action]
 
                 self.pull_deck = False
@@ -747,11 +806,11 @@ class RLEnvironment(gym.Env):
                 else:
                     self.invalid_actions_freq["flip_card"] += 1
                     self.count_wrong_actions += 1
-                    # reward -= penalty
+                    reward -= penalty
 
             # pull deck & put discard
             if action_actionname_mapping[action] == 'position' and (self.pull_deck and self.put_discard):
-                legal_positions = self._legal_positions(self.state[self.rl_name]["field"])
+                legal_positions = self._legal_positions(self.state[self.rl_name]["field"].astype(str))
                 position = self.action_position_mapping[action]
 
                 if position in legal_positions:
@@ -777,7 +836,7 @@ class RLEnvironment(gym.Env):
 
             # pull discard & change card
             if action_actionname_mapping[action] == 'position' and (self.pull_discard and self.change_card):
-                legal_positions = self._legal_positions(self.state[self.rl_name]["field"])
+                legal_positions = self._legal_positions(self.state[self.rl_name]["field"].astype(str))
                 position = self.action_position_mapping[action]
 
                 if position in legal_positions:
@@ -801,40 +860,89 @@ class RLEnvironment(gym.Env):
                     reward -= penalty
 
         elif self.game_state == "finished":
-            # print("Game is finished!")
+            print("Game is finished!")
+            reward += 1
             done = True
             truncated = False
             self.episode_reward = 0
 
-            if self.perfect_actions_over_all_actions:
-                if self.perfect_actions_over_all_actions[-1] > 0.9:
-                    reward += 1
+            # if self.perfect_actions_over_all_actions:
+            #     if self.perfect_actions_over_all_actions[-1] > 0.99:
+            #         reward += 1
 
             if self.count_wrong_actions == 0:
                 reward += 10
                 self.perfect_actions += 1
-
+                print(f"PERFECT PLAY!")
             
             self.perfect_actions_over_all_actions.append(self.perfect_actions / self.total_actions_taken)
 
-            # print(f"Number of wrong actions: {self.count_wrong_actions}\t Number of perfect actions: {self.perfect_actions}")
+            print(f"Number of wrong actions: {self.count_wrong_actions}\t Perfect actions ratio {self.perfect_actions_over_all_actions[-1]}")
             self.reward_history.append(reward)
             self.count_wrong_actions = 0
             self.perfect_actions = 0
             self.total_actions_taken = 0
 
-            return self.state, reward, done, truncated, {}
+            last_action_one_hot_encode = self._one_hot_encode_last_action(last_action)
+            self.last_n_actions.pop(0)
+            self.last_n_actions.append(last_action_one_hot_encode)
+
+            field = np.array(self.state[self.rl_name]["field"], dtype=str)
+            values_one_hot_encode = np.array(self._one_hot_encode_values(field)).flatten()
+            terminal_state = np.concatenate((values_one_hot_encode.flatten(), last_action_one_hot_encode), axis=0)
+
+            info = {
+                "terminal_observation": terminal_state  # Return the final state as terminal_observation
+            }
+
+            # field = np.array(self.state[self.rl_name]["field"], dtype=str)
+            # values_one_hot_encode = np.array(self._one_hot_encode_values(field)).flatten()
+            # state = np.concatenate((values_one_hot_encode.flatten(), last_action_one_hot_encode), axis=0)
+            #
+            # infos = {
+            #     "terminal_observation": state  # Return the final state as terminal_observation
+            # }
+
+            return terminal_state, reward, done, truncated, info
+
+        # if self.count_wrong_actions >= 1:
+        #     done = True
+        #     truncated = False
+        #     self.episode_reward = 0
+        #     reward -= 5
+        #
+        #     self.perfect_actions_over_all_actions.append(self.perfect_actions / self.total_actions_taken)
+        #
+        #     # print("Game abort due to too many wrong actions!")
+        #     self.reward_history.append(reward)
+        #     self.count_wrong_actions = 0
+        #     self.perfect_actions = 0
+        #     self.total_actions_taken = 0
+        #
+        #     last_action_one_hot_encode = self._one_hot_encode_last_action(last_action)
+        #     self.last_n_actions.pop(0)
+        #     self.last_n_actions.append(last_action_one_hot_encode)
+        #
+        #     field = np.array(self.state[self.rl_name]["field"], dtype=str)
+        #     values_one_hot_encode = np.array(self._one_hot_encode_values(field)).flatten()
+        #     terminal_state = np.concatenate((values_one_hot_encode.flatten(), last_action_one_hot_encode), axis=0)
+        #
+        #     info = {
+        #         "terminal_observation": terminal_state  # Return the final state as terminal_observation
+        #     }
+        #
+        #     return terminal_state, reward, done, truncated, info
 
         if beginning_phase_finished:
             self.skyjo_env.state[self.rl_name]["state_of_game"] = "running"
 
         self.count_wrong_actions_history.append(self.count_wrong_actions)
 
-        if self.count_wrong_actions <= 1:
+        if self.count_wrong_actions <= 2:
             reward += 0.5
             if self.count_wrong_actions == 0:
-                reward += 1
-
+                reward += 2
+                self.perfect_actions += 1
         else:
             reward -= 1
 
@@ -889,8 +997,10 @@ class RLEnvironment(gym.Env):
         #     "probabilities": probabilities
         # }
 
+        info = {"terminal_observation": state}
+
         # must return observation, reward, terminated, truncated, info
-        return state, reward, done, truncated, {}
+        return state, reward, done, truncated, info
 
     def _last_action_mapping(self):
         mapping = {None: 0, "flip card": 1, "pull deck": 2, "pull discard": 3, "change card": 4}
@@ -960,10 +1070,11 @@ class RLEnvironment(gym.Env):
 
         reset_state = np.concatenate((values_one_hot_encoded, last_action), axis=1)
 
+        info = {"terminal_observation": reset_state}
 
         # print(f"State when finished: {reset_state}")
 
-        return reset_state, {}
+        return reset_state, info
 
 
 def cosine_scheduler(initial_value: float) -> float:
@@ -1042,34 +1153,50 @@ if __name__ == "__main__":
     rl_env = RLEnvironment(env)
     logging_callback = LoggingCallback()
 
-    model = PPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.0001))
-    print(f"Model on device: {model.device}")
-    model.learn(total_timesteps=100000, progress_bar=True, callback=logging_callback)
 
-    # calculate trend line of count_wrong_actions_history
-    trend = np.polyfit(range(len(rl_env.count_wrong_actions_history)), rl_env.count_wrong_actions_history, 1)
-    m, b = trend
+    # --- with masking ---
+    model = MaskablePPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.0001))
+    model.learn(total_timesteps=700000, progress_bar=True, callback=logging_callback)
 
-    count_wrong_actions_history = rl_env.count_wrong_actions_history
-    plt.plot(count_wrong_actions_history, "-o")
-    plt.plot(np.polyval(trend, range(len(count_wrong_actions_history))), label=f"Trend: {trend}; m: {m}; b: {b}")
-    plt.title("Number of wrong actions over time")
-    plt.grid()
-    plt.show()
 
-    print(f"Average wrong action count: {np.mean(count_wrong_actions_history)}")
-
-    # plot self.invalid_actions_freq = {"pull": 0, "change_put": 0, "flip_card": 0}
-    # invalid_actions_freq = rl_env.invalid_actions_freq
-    # plt.bar(list(invalid_actions_freq.keys()), list(invalid_actions_freq.values()))
-    # plt.title("Invalid actions frequency")
+    # --- without masking ---
+    # model = PPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.0001))
+    # #  = PPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.0001))
+    # print(f"Model on device: {model.device}")
+    # model.learn(total_timesteps=7000, progress_bar=True, callback=logging_callback)
+    #
+    # print(f"All last actions taken: {rl_env.all_last_actions}")
+    #
+    # # calculate trend line of count_wrong_actions_history
+    # trend = np.polyfit(range(len(rl_env.count_wrong_actions_history)), rl_env.count_wrong_actions_history, 1)
+    # m, b = trend
+    #
+    # count_wrong_actions_history = rl_env.count_wrong_actions_history
+    # plt.plot(count_wrong_actions_history, "-o")
+    # plt.plot(np.polyval(trend, range(len(count_wrong_actions_history))), label=f"Trend: {trend}; m: {m}; b: {b}")
+    # plt.title("Number of wrong actions over time")
+    # plt.grid()
+    # plt.show()
+    #
+    # print(f"Average wrong action count: {np.mean(count_wrong_actions_history)}")
+    #
+    # # plot self.invalid_actions_freq = {"pull": 0, "change_put": 0, "flip_card": 0}
+    # # invalid_actions_freq = rl_env.invalid_actions_freq
+    # # plt.bar(list(invalid_actions_freq.keys()), list(invalid_actions_freq.values()))
+    # # plt.title("Invalid actions frequency")
+    # # plt.show()
+    #
+    # # plot perfect actions over all actions
+    # perfect_actions_over_all_actions = rl_env.perfect_actions_over_all_actions
+    # trend_perfect_actions = np.polyfit(range(len(perfect_actions_over_all_actions)), perfect_actions_over_all_actions, 1)
+    # plt.plot(perfect_actions_over_all_actions, "o")
+    # # plot hline at 0.9
+    # plt.axhline(y=0.9, color='orange', linestyle='-')
+    # # plot trend line
+    # plt.plot(np.polyval(trend_perfect_actions, range(len(perfect_actions_over_all_actions))), label=f"Trend: {trend_perfect_actions}", color="red")
+    # plt.grid()
+    # plt.title("Perfect actions over all actions")
     # plt.show()
 
-    # plot perfect actions over all actions
-    perfect_actions_over_all_actions = rl_env.perfect_actions_over_all_actions
-    plt.plot(perfect_actions_over_all_actions, "o")
-    # plot hline at 0.9
-    plt.axhline(y=0.9, color='orange', linestyle='-')
-    plt.grid()
-    plt.title("Perfect actions over all actions")
-    plt.show()
+    # Average wrong action count: 6.980069846701917 (1st)
+    #
