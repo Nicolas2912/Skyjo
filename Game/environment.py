@@ -1,4 +1,11 @@
 import random
+import sys
+import os
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+print(f"Project Root: {PROJECT_ROOT}")
+sys.path.insert(0, PROJECT_ROOT)
+
 
 from Game.player import Player
 from Game.carddeck import Carddeck
@@ -22,6 +29,7 @@ from stable_baselines3.common.noise import NormalActionNoise
 print(torch.cuda.is_available())
 
 set_random_seed(7)
+
 
 
 class Environment:
@@ -648,10 +656,6 @@ class RLEnvironment(gym.Env):
 
 
 
-
-
-
-
     def step(self, action):
         self.iteration += 1
         self.total_actions_taken += 1
@@ -874,7 +878,7 @@ class RLEnvironment(gym.Env):
                 reward += 10
                 self.perfect_actions += 1
                 print(f"PERFECT PLAY!")
-            
+
             self.perfect_actions_over_all_actions.append(self.perfect_actions / self.total_actions_taken)
 
             print(f"Number of wrong actions: {self.count_wrong_actions}\t Perfect actions ratio {self.perfect_actions_over_all_actions[-1]}")
