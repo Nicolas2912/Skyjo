@@ -479,6 +479,7 @@ class RLEnvironment(gym.Env):
         self.last_n_actions = [[0,0,0,0,0] for _ in range(self.n_last_actions)]
 
         self.all_last_actions = set()
+        self.own_action_mask = None
 
 
     def _transform_state(self, state):
@@ -535,7 +536,7 @@ class RLEnvironment(gym.Env):
 
         action_actionname_mapping[12] = "pull_deck"
         action_actionname_mapping[13] = "pull_discard"
-        action_actionname_mapping[14] = "change"
+        action_actionname_mapping[14] = "change" # Maybe delete this
         action_actionname_mapping[15] = "put_discard"
 
         actionname_action_mapping = {v: k for k, v in action_actionname_mapping.items()}
@@ -619,42 +620,93 @@ class RLEnvironment(gym.Env):
         state_of_game = self.state[self.rl_name]["state_of_game"]
 
         # TODO: Berücksichtige hier auch noch den state_of_game!
+        if state_of_game == "beginning":
 
-        if last_action is None:
-            action_mask = [True for _ in range(12)]
-            action_mask_false = [False for _ in range(4)]
-            action_mask.extend(action_mask_false)
-            return action_mask
+            if last_action is None:
+                action_mask = [True for _ in range(12)]
+                action_mask_false = [False for _ in range(4)]
+                action_mask.extend(action_mask_false)
+                self.own_action_mask = action_mask
+                action_mask = np.array(action_mask, dtype=bool)
 
-        if last_action == "flip card":
+                return action_mask
+
+            if last_action == "flip card":
+                position_action_mapping = self._position_action_mapping()
+                valid_positions = [position_action_mapping[pos] for pos in legal_positions]
+                action_mask = [False for _ in range(12)]
+                for pos in valid_positions:
+                    action_mask[pos] = True
+                action_mask_false = [False for _ in range(4)]
+                action_mask.extend(action_mask_false)
+                self.own_action_mask = action_mask
+                action_mask = np.array(action_mask, dtype=bool)
+
+                return action_mask
+
+        if state_of_game == "running":
+            if last_action == "flip card":
+                action_mask = [False for _ in range(16)]
+                action_mask[12] = True
+                action_mask[13] = True
+                self.own_action_mask = action_mask
+                action_mask = np.array(action_mask, dtype=bool)
+
+                return action_mask
+
+            if last_action == "pull deck":
+                action_mask = [False for _ in range(16)]
+                position_action_mapping = self._position_action_mapping()
+                valid_positions = [position_action_mapping[pos] for pos in legal_positions]
+                for pos in valid_positions:
+                    action_mask[pos] = True
+                action_mask[15] = True
+                self.own_action_mask = action_mask
+                action_mask = np.array(action_mask, dtype=bool)
+
+                return action_mask
+
+            if last_action == "change card":
+                action_mask = [False for _ in range(16)]
+                action_mask[12] = True
+                action_mask[13] = True
+                self.own_action_mask = action_mask
+                action_mask = np.array(action_mask, dtype=bool)
+
+                return action_mask
+
+            if last_action == "put discard":
+                position_action_mapping = self._position_action_mapping()
+                valid_positions = [position_action_mapping[pos] for pos in legal_positions]
+                action_mask = [False for _ in range(12)]
+                for pos in valid_positions:
+                    action_mask[pos] = True
+                action_mask_false = [False for _ in range(4)]
+                action_mask.extend(action_mask_false)
+                self.own_action_mask = action_mask
+                action_mask = np.array(action_mask, dtype=bool)
+
+                return action_mask
+
+            if last_action == "pull discard":
+                position_action_mapping = self._position_action_mapping()
+                valid_positions = [position_action_mapping[pos] for pos in legal_positions]
+                action_mask = [False for _ in range(12)]
+                for pos in valid_positions:
+                    action_mask[pos] = True
+                action_mask_false = [False for _ in range(4)]
+                action_mask.extend(action_mask_false)
+                self.own_action_mask = action_mask
+                action_mask = np.array(action_mask, dtype=bool)
+
+                return action_mask
+
+        if state_of_game == "finished":
             action_mask = [False for _ in range(16)]
-            action_mask[12] = True
-            action_mask[13] = True
-            return action_mask
-
-        if last_action == "pull deck":
-            action_mask = [False for _ in range(16)]
-            action_mask[14] = True
-            action_mask[15] = True
-            return action_mask
-
-        if last_action == "change card" or last_action == "put discard":
-            position_action_mapping = self._position_action_mapping()
-            valid_positions = [position_action_mapping[pos] for pos in legal_positions]
-            action_mask = [False for _ in range(12)]
-            for pos in valid_positions:
-                action_mask[pos] = True
-            action_mask_false = [False for _ in range(4)]
-            action_mask.extend(action_mask_false)
+            self.own_action_mask = action_mask
+            action_mask = np.array(action_mask, dtype=bool)
 
             return action_mask
-
-        if last_action == "pull discard":
-            action_mask = [False for _ in range(16)]
-            action_mask[14] = True
-            return action_mask
-
-
 
     def step(self, action):
         self.iteration += 1
@@ -664,6 +716,8 @@ class RLEnvironment(gym.Env):
         correct_action_reward = 0.0
         false_action_reward = 5
         penalty = 0.01
+
+        output = False
 
         every_card_hidden = self._check_every_card_hidden()
         self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
@@ -686,9 +740,10 @@ class RLEnvironment(gym.Env):
         if self.game_state == "beginning" and every_card_hidden:  # for first flip. All positions are legal
             if action in range(12):
                 position = self.action_position_mapping[action]
-                self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "flip card", position, output=False)
+                self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "flip card", position, output=output)
                 # print the game field
-                # self.skyjo_env.print_game_field()
+                if output:
+                    self.skyjo_env.print_game_field()
 
                 # update state
                 self.skyjo_env.update_state(self.rl_name, "flip card")
@@ -712,9 +767,10 @@ class RLEnvironment(gym.Env):
                 position = self.action_position_mapping[action]
 
                 if position in legal_positions:
-                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "flip card", position, output=False)
+                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "flip card", position, output=output)
                     # print the game field
-                    # self.skyjo_env.print_game_field()
+                    if output:
+                        self.skyjo_env.print_game_field()
 
                     # update state
                     self.skyjo_env.update_state(self.rl_name, "flip card")
@@ -735,136 +791,93 @@ class RLEnvironment(gym.Env):
         elif self.game_state == "running":
             action_actionname_mapping, actionname_action_mapping = self._action_mapping()
 
-            # print(f"Action: {action}; {action_actionname_mapping[action]}")
+            # print(f"Action: {action}; {action_actionname_mapping[action]}; Last Action: {last_action}; Valid Actions: {self._legal_actions()}")
 
-            if action in [actionname_action_mapping["pull_deck"], actionname_action_mapping["pull_discard"]]:
-                if action == actionname_action_mapping["pull_deck"]:
-                    # update state
-                    # TODO: Here agent can't execute action for real because agent can choose wrong action afterwards.
-                    # But the state must be updated without taken any action.
-                    # How do I model this? --> With copies of the environment and everything?
+            if action_actionname_mapping[action] == 'pull_deck':
+                self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "pull deck", output=output)
 
-                    skyjo_env_copy = copy.deepcopy(self.skyjo_env)
-                    skyjo_env_copy.execute_action(skyjo_env_copy.agents[self.rl_name], "pull deck", output=False)
+                # update state
+                self.skyjo_env.update_state(self.rl_name, "pull deck")
 
-                    skyjo_env_copy.update_state(self.rl_name, "pull deck")
-                    self.state = self._transform_state(skyjo_env_copy.state)
+                # print the game field
+                if output:
+                    self.skyjo_env.print_game_field()
 
-                    self.pull_deck = True
-                    # reward += 0.1
-                if action == actionname_action_mapping["pull_discard"]:
-                    # check if discard stack is empty
-                    discard_stack = self.skyjo_env.carddeck.discard_stack
-                    if len(discard_stack) == 0:
-                        self.count_wrong_actions += 1
-                        reward -= penalty
-                    else:
-                        # update state
-                        skyjo_env_copy = copy.deepcopy(self.skyjo_env)
-                        skyjo_env_copy.execute_action(skyjo_env_copy.agents[self.rl_name], "pull discard", output=False)
+                state = self.skyjo_env.state
+                self.state = self._transform_state(state)
+                reward += correct_action_reward
 
-                        skyjo_env_copy.update_state(self.rl_name, "pull discard")
-                        self.state = self._transform_state(skyjo_env_copy.state)
+            if action_actionname_mapping[action] == 'pull_discard':
+                self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "pull discard", output=output)
 
-                        self.pull_discard = True
-                        # reward += 0.1
-            else:
-                self.invalid_actions_freq["pull"] += 1
-                reward -= penalty
+                # update state
+                self.skyjo_env.update_state(self.rl_name, "pull discard")
 
-            if action in [actionname_action_mapping["change"], actionname_action_mapping["put_discard"]] and (
-                    self.pull_deck or self.pull_discard):
-                if action == actionname_action_mapping["change"]:
-                    self.change_card = True
-                    # reward += correct_action_reward
-                if action == actionname_action_mapping["put_discard"]:
-                    self.put_discard = True
-                    # reward += correct_action_reward
+                # print the game field
+                if output:
+                    self.skyjo_env.print_game_field()
 
-                else:
-                    self.invalid_actions_freq["change_put"] += 1
-                    self.count_wrong_actions += 1
-                    reward -= penalty
+                state = self.skyjo_env.state
+                self.state = self._transform_state(state)
+                reward += correct_action_reward
 
-            # pull deck & change card
-            if action_actionname_mapping[action] == 'position' and (self.pull_deck and self.change_card):
+                self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
+
+            # put discard
+            if action_actionname_mapping[action] == 'put_discard':
+                self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "put discard", output=output)
+
+                # update state
+                self.skyjo_env.update_state(self.rl_name, "pull discard")
+
+                # print the game field
+                if output:
+                    self.skyjo_env.print_game_field()
+
+                state = self.skyjo_env.state
+                self.state = self._transform_state(state)
+                reward += correct_action_reward
+
+                self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
+
+
+            # change card
+            if action_actionname_mapping[action] == 'position':
                 legal_positions = self._legal_positions(self.state[self.rl_name]["field"].astype(str))
                 position = self.action_position_mapping[action]
 
-                self.pull_deck = False
-                self.change_card = False
-
                 if position in legal_positions:
-                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "pull deck", output=False)
-                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "change card", position, output=False)
+                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "change card", position, output=output)
 
                     # update state
                     self.skyjo_env.update_state(self.rl_name, "change card")
 
                     # print the game field
-                    # self.skyjo_env.print_game_field()
-
-                    state = self.skyjo_env.state
-                    self.state = self._transform_state(state)
-                    # reward += correct_action_reward
-                else:
-                    self.invalid_actions_freq["flip_card"] += 1
-                    self.count_wrong_actions += 1
-                    reward -= penalty
-
-            # pull deck & put discard
-            if action_actionname_mapping[action] == 'position' and (self.pull_deck and self.put_discard):
-                legal_positions = self._legal_positions(self.state[self.rl_name]["field"].astype(str))
-                position = self.action_position_mapping[action]
-
-                if position in legal_positions:
-                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "pull deck", output=False)
-                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "put discard", position, output=False)
-
-                    # update state
-                    self.skyjo_env.update_state(self.rl_name, "put discard")
-
-                    self.pull_deck = False
-                    self.put_discard = False
-
-                    # print the game field
-                    # self.skyjo_env.print_game_field()
+                    if output:
+                        self.skyjo_env.print_game_field()
 
                     state = self.skyjo_env.state
                     self.state = self._transform_state(state)
                     reward += correct_action_reward
+                    self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
+
                 else:
                     self.invalid_actions_freq["flip_card"] += 1
                     self.count_wrong_actions += 1
                     reward -= penalty
+                    print(
+                        f"Invalid action: {action}; Last Action: {last_action}; Valid Actions: {self._legal_actions()}")
 
-            # pull discard & change card
-            if action_actionname_mapping[action] == 'position' and (self.pull_discard and self.change_card):
-                legal_positions = self._legal_positions(self.state[self.rl_name]["field"].astype(str))
-                position = self.action_position_mapping[action]
+                # check if player has card on hand
+                # card_on_hand = self.skyjo_env.agents[self.rl_name].card_on_hand
+                # print(card_on_hand)
 
-                if position in legal_positions:
-                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "pull discard", output=False)
-                    self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "change card", position, output=False)
-
-                    # update state
-                    self.skyjo_env.update_state(self.rl_name, "change card")
-                    self.pull_discard = False
-                    self.change_card = False
-
-                    # print the game field
-                    # self.skyjo_env.print_game_field()
-
-                    state = self.skyjo_env.state
-                    self.state = self._transform_state(state)
-                    reward += correct_action_reward
-                else:
-                    self.invalid_actions_freq["flip_card"] += 1
-                    self.count_wrong_actions += 1
-                    reward -= penalty
+            self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
+            # print(f"self.game_state: {self.game_state}")
+            # print(f"self.state[self.rl_name]['state_of_game']: {self.state[self.rl_name]['state_of_game']}")
 
         elif self.game_state == "finished":
-            print("Game is finished!")
+            # print("Game is finished!")
             reward += 1
             done = True
             truncated = False
@@ -874,14 +887,14 @@ class RLEnvironment(gym.Env):
             #     if self.perfect_actions_over_all_actions[-1] > 0.99:
             #         reward += 1
 
-            if self.count_wrong_actions == 0:
-                reward += 10
-                self.perfect_actions += 1
-                print(f"PERFECT PLAY!")
+            # if self.count_wrong_actions == 0:
+            #     reward += 10
+            #     self.perfect_actions += 1
+            #     print(f"PERFECT PLAY!")
 
             self.perfect_actions_over_all_actions.append(self.perfect_actions / self.total_actions_taken)
 
-            print(f"Number of wrong actions: {self.count_wrong_actions}\t Perfect actions ratio {self.perfect_actions_over_all_actions[-1]}")
+            # print(f"Number of wrong actions: {self.count_wrong_actions}\t Perfect actions ratio {self.perfect_actions_over_all_actions[-1]}")
             self.reward_history.append(reward)
             self.count_wrong_actions = 0
             self.perfect_actions = 0
@@ -1160,7 +1173,7 @@ if __name__ == "__main__":
 
     # --- with masking ---
     model = MaskablePPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.0001))
-    model.learn(total_timesteps=700000, progress_bar=True, callback=logging_callback)
+    model.learn(total_timesteps=70000, progress_bar=True, callback=logging_callback)
 
 
     # --- without masking ---
