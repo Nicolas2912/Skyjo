@@ -481,6 +481,9 @@ class RLEnvironment(gym.Env):
         self.all_last_actions = set()
         self.own_action_mask = None
 
+        self.points = []
+        self.points_in_running = []
+
 
     def _transform_state(self, state):
         new_state = {}
@@ -711,10 +714,13 @@ class RLEnvironment(gym.Env):
     def step(self, action):
         self.iteration += 1
         self.total_actions_taken += 1
+
         reward = 0
         done = False
-        correct_action_reward = 0.0
-        false_action_reward = 5
+        terminal_state = False
+        truncated = False
+        info = {}
+
         penalty = 0.01
 
         output = False
@@ -723,6 +729,7 @@ class RLEnvironment(gym.Env):
         self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
 
         beginning_phase_finished = None
+
 
         # check last action
         last_action = self.state[self.rl_name]["last_action"]
@@ -756,6 +763,7 @@ class RLEnvironment(gym.Env):
                 self.invalid_actions_freq["flip_card"] += 1
                 self.count_wrong_actions += 1
                 reward -= penalty
+                print("Penalty")
 
         elif self.game_state == "beginning" and not every_card_hidden:
             if action in range(12):
@@ -778,15 +786,9 @@ class RLEnvironment(gym.Env):
                     # get current state
                     state = self.skyjo_env.state
                     self.state = self._transform_state(state)
-                    # reward += correct_action_reward
 
                     beginning_phase_finished = True
 
-                else:
-                    reward -= penalty
-            else:
-                self.invalid_actions_freq["flip_card"] += 1
-                reward -= penalty
 
         elif self.game_state == "running":
             action_actionname_mapping, actionname_action_mapping = self._action_mapping()
@@ -805,7 +807,6 @@ class RLEnvironment(gym.Env):
 
                 state = self.skyjo_env.state
                 self.state = self._transform_state(state)
-                reward += correct_action_reward
 
             if action_actionname_mapping[action] == 'pull_discard':
                 self.skyjo_env.execute_action(self.skyjo_env.agents[self.rl_name], "pull discard", output=output)
@@ -819,7 +820,6 @@ class RLEnvironment(gym.Env):
 
                 state = self.skyjo_env.state
                 self.state = self._transform_state(state)
-                reward += correct_action_reward
 
                 self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
 
@@ -836,10 +836,8 @@ class RLEnvironment(gym.Env):
 
                 state = self.skyjo_env.state
                 self.state = self._transform_state(state)
-                reward += correct_action_reward
 
                 self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
-
 
             # change card
             if action_actionname_mapping[action] == 'position':
@@ -858,48 +856,35 @@ class RLEnvironment(gym.Env):
 
                     state = self.skyjo_env.state
                     self.state = self._transform_state(state)
-                    reward += correct_action_reward
                     self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
+                    player_points = self.skyjo_env.gamefield.calculate_sum_player(self.skyjo_env.gamefield.players_list, card_value_mapping=self.skyjo_env.carddeck.card_value_mapping)
 
-                else:
-                    self.invalid_actions_freq["flip_card"] += 1
-                    self.count_wrong_actions += 1
-                    reward -= penalty
-                    print(
-                        f"Invalid action: {action}; Last Action: {last_action}; Valid Actions: {self._legal_actions()}")
-
-                # check if player has card on hand
-                # card_on_hand = self.skyjo_env.agents[self.rl_name].card_on_hand
-                # print(card_on_hand)
+                    self.points_in_running.append(player_points[self.rl_name])
+                    if len(self.points_in_running) > 1:
+                        if player_points[self.rl_name] < self.points_in_running[-2]:
+                            reward += 0
+                        else:
+                            reward -= 1
 
             self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
             # print(f"self.game_state: {self.game_state}")
             # print(f"self.state[self.rl_name]['state_of_game']: {self.state[self.rl_name]['state_of_game']}")
 
-        elif self.game_state == "finished":
-            # print("Game is finished!")
-            reward += 1
+        if self.game_state == "finished":
+            players = self.skyjo_env.gamefield.players_list
+            player_points = self.skyjo_env.gamefield.calculate_sum_player(players, card_value_mapping=self.skyjo_env.carddeck.card_value_mapping)
+
+            if len(self.points) > 1:
+                if player_points[self.rl_name] < min(self.points):
+                    reward += 0
+                else:
+                    reward -= 1
+
+            self.points.append(player_points[self.rl_name])
             done = True
-            truncated = False
-            self.episode_reward = 0
 
-            # if self.perfect_actions_over_all_actions:
-            #     if self.perfect_actions_over_all_actions[-1] > 0.99:
-            #         reward += 1
-
-            # if self.count_wrong_actions == 0:
-            #     reward += 10
-            #     self.perfect_actions += 1
-            #     print(f"PERFECT PLAY!")
-
-            self.perfect_actions_over_all_actions.append(self.perfect_actions / self.total_actions_taken)
-
-            # print(f"Number of wrong actions: {self.count_wrong_actions}\t Perfect actions ratio {self.perfect_actions_over_all_actions[-1]}")
-            self.reward_history.append(reward)
-            self.count_wrong_actions = 0
-            self.perfect_actions = 0
-            self.total_actions_taken = 0
-
+            # Calculate terminal state
+            last_action = self.state[self.rl_name]["last_action"]
             last_action_one_hot_encode = self._one_hot_encode_last_action(last_action)
             self.last_n_actions.pop(0)
             self.last_n_actions.append(last_action_one_hot_encode)
@@ -908,116 +893,35 @@ class RLEnvironment(gym.Env):
             values_one_hot_encode = np.array(self._one_hot_encode_values(field)).flatten()
             terminal_state = np.concatenate((values_one_hot_encode.flatten(), last_action_one_hot_encode), axis=0)
 
-            info = {
-                "terminal_observation": terminal_state  # Return the final state as terminal_observation
-            }
+            # Update performance metrics
+            self.perfect_actions_over_all_actions.append(self.perfect_actions / self.total_actions_taken)
+            self.reward_history.append(reward)
+            self.count_wrong_actions = 0
+            self.perfect_actions = 0
+            self.total_actions_taken = 0
 
-            # field = np.array(self.state[self.rl_name]["field"], dtype=str)
-            # values_one_hot_encode = np.array(self._one_hot_encode_values(field)).flatten()
-            # state = np.concatenate((values_one_hot_encode.flatten(), last_action_one_hot_encode), axis=0)
-            #
-            # infos = {
-            #     "terminal_observation": state  # Return the final state as terminal_observation
-            # }
-
-            return terminal_state, reward, done, truncated, info
-
-        # if self.count_wrong_actions >= 1:
-        #     done = True
-        #     truncated = False
-        #     self.episode_reward = 0
-        #     reward -= 5
-        #
-        #     self.perfect_actions_over_all_actions.append(self.perfect_actions / self.total_actions_taken)
-        #
-        #     # print("Game abort due to too many wrong actions!")
-        #     self.reward_history.append(reward)
-        #     self.count_wrong_actions = 0
-        #     self.perfect_actions = 0
-        #     self.total_actions_taken = 0
-        #
-        #     last_action_one_hot_encode = self._one_hot_encode_last_action(last_action)
-        #     self.last_n_actions.pop(0)
-        #     self.last_n_actions.append(last_action_one_hot_encode)
-        #
-        #     field = np.array(self.state[self.rl_name]["field"], dtype=str)
-        #     values_one_hot_encode = np.array(self._one_hot_encode_values(field)).flatten()
-        #     terminal_state = np.concatenate((values_one_hot_encode.flatten(), last_action_one_hot_encode), axis=0)
-        #
-        #     info = {
-        #         "terminal_observation": terminal_state  # Return the final state as terminal_observation
-        #     }
-        #
-        #     return terminal_state, reward, done, truncated, info
-
-        if beginning_phase_finished:
-            self.skyjo_env.state[self.rl_name]["state_of_game"] = "running"
-
-        self.count_wrong_actions_history.append(self.count_wrong_actions)
-
-        if self.count_wrong_actions <= 2:
-            reward += 0.5
-            if self.count_wrong_actions == 0:
-                reward += 2
-                self.perfect_actions += 1
         else:
-            reward -= 1
+            # Calculate regular state
+            field = np.array(self.state[self.rl_name]["field"], dtype=str)
+            last_action = self.state[self.rl_name]["last_action"]
+            last_action_one_hot_encode = self._one_hot_encode_last_action(last_action)
+            self.last_n_actions.pop(0)
+            self.last_n_actions.append(last_action_one_hot_encode)
+            values_one_hot_encode = np.array(self._one_hot_encode_values(field)).flatten()
+            terminal_state = np.concatenate((values_one_hot_encode.flatten(), last_action_one_hot_encode), axis=0)
 
-        if len(self.count_wrong_actions_history) > 1:
-            if self.count_wrong_actions <= self.count_wrong_actions_history[-2]:
-                reward += 0.5
+            # Update action history
+            last_action_mapping, _ = self._last_action_mapping()
+            try:
+                self.all_actions[self.iteration] = last_action_mapping[last_action]
+            except Exception as e:
+                pass
 
-        truncated = False
+            # Always include terminal_state in info
+        info = {"terminal_observation": terminal_state}
 
-        field = np.array(self.state[self.rl_name]["field"], dtype=str)
-
-        probabilities = list()
-        for prob in self.skyjo_env.state["probabilities"].values():
-            probabilities.append(prob)
-        probabilities = np.array(probabilities)
-        # discard_stack = np.array(self.skyjo_env.carddeck.discard_stack)
-
-        # discard_stack = self._extend_discard_stack(discard_stack)
-
-        last_action = self.state[self.rl_name]["last_action"]
-        last_action_mapping, _ = self._last_action_mapping()
-        state = last_action_mapping[last_action]
-
-        # field_visibility_one_hot_encode = self._one_hot_encode_visibility(field)
-        last_action_one_hot_encode = self._one_hot_encode_last_action(last_action)
-        self.last_n_actions.pop(0)
-        self.last_n_actions.append(last_action_one_hot_encode)
-
-        values_one_hot_encode = np.array(self._one_hot_encode_values(field)).flatten()
-
-        try:
-            self.all_actions[self.iteration] = last_action_mapping[last_action]
-        except Exception as e:
-            pass
-            # print(f"Iteration: {self.iteration}")
-            # print(self.all_actions)
-
-        # state = self.all_actions
-        # state = np.concatenate((self.all_actions, self.state[self.rl_name]["field"].flatten()))
-        # last_n_actions_one_hot_encode = np.array(self.last_n_actions).flatten()
-        # field_visibility_one_hot_encode = field_visibility_one_hot_encode.flatten()
-        # state = np.concatenate((field_visibility_one_hot_encode, last_n_actions_one_hot_encode), axis=0)
-
-        self.episode_reward += reward
-
-        # concat of values_one_hot_encode and last_action
-        state = np.concatenate((values_one_hot_encode.flatten(), last_action_one_hot_encode), axis=0)
-        # print(state)
-        # state = {
-        #     "field": field,
-        #     "discard_stack": discard_stack,
-        #     "probabilities": probabilities
-        # }
-
-        info = {"terminal_observation": state}
-
-        # must return observation, reward, terminated, truncated, info
-        return state, reward, done, truncated, info
+        # Single return statement for all cases
+        return terminal_state, reward, done, truncated, info
 
     def _last_action_mapping(self):
         mapping = {None: 0, "flip card": 1, "pull deck": 2, "pull discard": 3, "change card": 4}
@@ -1172,9 +1076,25 @@ if __name__ == "__main__":
 
 
     # --- with masking ---
-    model = MaskablePPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.0001))
-    model.learn(total_timesteps=70000, progress_bar=True, callback=logging_callback)
+    model = MaskablePPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.001))
+    model.learn(total_timesteps=50000, progress_bar=True, callback=logging_callback)
 
+    # plot points
+    plt.plot(rl_env.points, "-o", label="Points of agent")
+    plt.title("Points over time")
+    plt.grid()
+    plt.xlabel("Episode")
+    plt.ylabel("Points")
+    mean_points = np.mean(rl_env.points)
+    plt.axhline(y=mean_points, color='red', label=f"Mean: {round(mean_points, 4)}")
+
+    # calculate trend on points
+    trend = np.polyfit(range(len(rl_env.points)), rl_env.points, 1)
+    m, b = trend
+    plt.plot(np.polyval(trend, range(len(rl_env.points))), label=f"m: {round(m, 4)}; b: {round(b, 4)}")
+    plt.legend()
+
+    plt.show()
 
     # --- without masking ---
     # model = PPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.0001))
