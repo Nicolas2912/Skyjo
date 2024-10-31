@@ -1,0 +1,16 @@
+# Results
+
+## Random Agent
+
+- Runs: 10000
+- Number of Players/Agents: 1 (Only RandomAgent)
+- Average Score: 53.18
+
+## Simple Reflex Agent
+
+- Runs: 10000
+- Number of Players/Agents: 1 (Only ReflexAgent)
+- Average Score: 9.13
+
+## PPO Agent with action maskking
+
