@@ -574,6 +574,10 @@ class Simulation:
             time_elapsed_simulation = time.time() - start_simulation
             time_results.append(time_elapsed_simulation)
 
+        for agent_name in self.agent_names:
+            avg_results = np.mean(overall_results[agent_name])
+            print(f"Average points over {n} runs for {agent_name}: {avg_results}")
+
         print(f"Average time per run: {np.mean(time_results):.2f} seconds")
 
         # plot histogram
@@ -741,14 +745,13 @@ if __name__ == "__main__":
     # player = Player("Nicolas", carddeck, (4, 3))
     # player1 = Player("Linus", carddeck, (4, 3))
     # agent = RandomAgent2("RandomAgent", carddeck, (4, 3))
-    # # agent1 = ReflexAgent2("ReflexAgent", carddeck, (4, 3))
     # #
-    # gamefield = GameField(4, 3, [player, agent], carddeck)
+    # gamefield = GameField(4, 3, [agent], carddeck)
     # environment = Environment(gamefield)
     # #
     # game = Game2(environment)
     # game.start_agents(True)
     # game.run_agents()
 
-    S = Simulation(["ReflexAgent", "ReflexAgent"])
-    S.simulate_agent_games(1000, False, False)
+    S = Simulation(["ReflexAgent"])
+    S.simulate_agent_games(10000, False, False)
