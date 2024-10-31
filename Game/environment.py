@@ -28,14 +28,14 @@ from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.noise import NormalActionNoise
 print(torch.cuda.is_available())
 
-set_random_seed(7)
+# set_random_seed(7)
 
 
 
 class Environment:
 
-    def __init__(self, gamefield: GameField, seed: int = 7):
-        self.seed(seed)
+    def __init__(self, gamefield: GameField):
+        # self.seed(seed)
 
         self.carddeck = gamefield.carddeck
         # make copy of carddeck
@@ -71,10 +71,17 @@ class Environment:
 
     def init_agents(self, agent_list: list):
         agents = {}
+        from agents.simple_reflex_agent import RandomAgent2, ReflexAgent2
         for agent in agent_list:
             # check if instance from agent is not Player
-            if not isinstance(agent, Player):
+            if isinstance(agent, RLAgent) and not isinstance(agent, Player):
                 agent = RLAgent(agent.name, self.carddeck_copy, (self.gamefield.length, self.gamefield.height))
+                agents[agent.name] = agent
+            elif isinstance(agent, RandomAgent2):
+                agent = RandomAgent2(agent.name, self.carddeck_copy, (self.gamefield.length, self.gamefield.height))
+                agents[agent.name] = agent
+            elif isinstance(agent, ReflexAgent2):
+                agent = ReflexAgent2(agent.name, self.carddeck_copy, (self.gamefield.length, self.gamefield.height))
                 agents[agent.name] = agent
 
         return agents
@@ -483,6 +490,7 @@ class RLEnvironment(gym.Env):
 
         self.points = []
         self.points_in_running = []
+        self.points_finished = []
 
 
     def _transform_state(self, state):
@@ -711,6 +719,9 @@ class RLEnvironment(gym.Env):
 
             return action_mask
 
+    def theoretical_normalize(self, points):
+        return (points - -24) / 168
+
     def step(self, action):
         self.iteration += 1
         self.total_actions_taken += 1
@@ -720,8 +731,6 @@ class RLEnvironment(gym.Env):
         terminal_state = False
         truncated = False
         info = {}
-
-        penalty = 0.01
 
         output = False
 
@@ -758,12 +767,6 @@ class RLEnvironment(gym.Env):
                 # get current state
                 state = self.skyjo_env.state
                 self.state = self._transform_state(state)
-                # reward += correct_action_reward
-            else:
-                self.invalid_actions_freq["flip_card"] += 1
-                self.count_wrong_actions += 1
-                reward -= penalty
-                print("Penalty")
 
         elif self.game_state == "beginning" and not every_card_hidden:
             if action in range(12):
@@ -788,7 +791,6 @@ class RLEnvironment(gym.Env):
                     self.state = self._transform_state(state)
 
                     beginning_phase_finished = True
-
 
         elif self.game_state == "running":
             action_actionname_mapping, actionname_action_mapping = self._action_mapping()
@@ -857,14 +859,18 @@ class RLEnvironment(gym.Env):
                     state = self.skyjo_env.state
                     self.state = self._transform_state(state)
                     self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
-                    player_points = self.skyjo_env.gamefield.calculate_sum_player(self.skyjo_env.gamefield.players_list, card_value_mapping=self.skyjo_env.carddeck.card_value_mapping)
+                    current_points = self.skyjo_env.gamefield.calculate_sum_player(self.skyjo_env.gamefield.players_list, card_value_mapping=self.skyjo_env.carddeck.card_value_mapping)
 
-                    self.points_in_running.append(player_points[self.rl_name])
+                    self.points_in_running.append(current_points[self.rl_name])
                     if len(self.points_in_running) > 1:
-                        if player_points[self.rl_name] < self.points_in_running[-2]:
-                            reward += 0
+                        if current_points[self.rl_name] < self.points_in_running[-2]:
+                            reward += 1
+                        if current_points[self.rl_name] < min(self.points_in_running):
+                            reward += 2
                         else:
                             reward -= 1
+
+                        reward += (1 - self.theoretical_normalize(current_points[self.rl_name])) * 2
 
             self.game_state = self.skyjo_env.state[self.rl_name]["state_of_game"]
             # print(f"self.game_state: {self.game_state}")
@@ -874,9 +880,13 @@ class RLEnvironment(gym.Env):
             players = self.skyjo_env.gamefield.players_list
             player_points = self.skyjo_env.gamefield.calculate_sum_player(players, card_value_mapping=self.skyjo_env.carddeck.card_value_mapping)
 
+            self.points_finished.append(player_points[self.rl_name])
+
             if len(self.points) > 1:
-                if player_points[self.rl_name] < min(self.points):
-                    reward += 0
+                if self.points_finished[-1] < self.points_finished[-2]:
+                    reward += 1
+                if self.points_finished[-1] < min(self.points_finished):
+                    reward += 2
                 else:
                     reward -= 1
 
@@ -1076,8 +1086,9 @@ if __name__ == "__main__":
 
 
     # --- with masking ---
-    model = MaskablePPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=cosine_scheduler(0.001))
-    model.learn(total_timesteps=50000, progress_bar=True, callback=logging_callback)
+    model = MaskablePPO("MlpPolicy", rl_env, verbose=1, device='cuda', learning_rate=0.0001)
+    model.learn(total_timesteps=100000, progress_bar=True, callback=logging_callback)
+    print(f"Averge points: {np.mean(rl_env.points_finished)}")
 
     # plot points
     plt.plot(rl_env.points, "-o", label="Points of agent")
