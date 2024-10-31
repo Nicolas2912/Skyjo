@@ -115,6 +115,9 @@ class GameField:
                 new_position = eval(new_position)
                 flipped = flip_card_on_field_helper(player, new_position)
 
+        # update field_hidden
+
+
     def change_card_with_card_on_hand(self, player, position: tuple):
         if player.card_on_hand is None:
             print("No card on hand!")
