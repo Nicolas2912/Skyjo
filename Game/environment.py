@@ -722,9 +722,101 @@ class RLEnvironment(gym.Env):
     def theoretical_normalize(self, points):
         return (points - -24) / 168
 
+    def _get_board_state_summary(self):
+        """
+        Get a summary of the current board state focusing on matches and cleared lines.
+        Returns a dictionary with key metrics about the board state.
+        """
+        field = self.state[self.rl_name]["field"]
+        height, length = field.shape
+        summary = {
+            "cleared_lines": 0,  # Number of cleared lines ("-" symbols)
+            "potential_matches": [],  # List of (value, count) for potential matches
+            "matching_pairs": 0,  # Number of adjacent matching pairs
+            "matching_triples": 0  # Number of adjacent matching triples
+        }
+
+        # Count cleared lines (rows and columns)
+        cleared_count = np.sum(field == 15)  # 15 represents "-" in your encoding
+        summary["cleared_lines"] = cleared_count // max(height, length)  # Normalize by dimension
+
+        # Check rows for matches and potentials
+        for i in range(height):
+            row = field[i]
+            visible_row = row[row != 14]  # Remove hidden cards
+            if len(visible_row) >= 2:
+                values, counts = np.unique(visible_row, return_counts=True)
+                for v, c in zip(values, counts):
+                    if v != 15 and c >= 2:  # Don't count cleared lines
+                        summary["matching_pairs"] += (c >= 2)
+                        summary["matching_triples"] += (c >= 3)
+                        if c == 2:
+                            summary["potential_matches"].append((v, c))
+
+        # Check columns for matches and potentials
+        for j in range(length):
+            col = field[:, j]
+            visible_col = col[col != 14]  # Remove hidden cards
+            if len(visible_col) >= 2:
+                values, counts = np.unique(visible_col, return_counts=True)
+                for v, c in zip(values, counts):
+                    if v != 15 and c >= 2:  # Don't count cleared lines
+                        summary["matching_pairs"] += (c >= 2)
+                        summary["matching_triples"] += (c >= 3)
+                        if c == 2:
+                            summary["potential_matches"].append((v, c))
+
+        return summary
+
+    def _evaluate_board_improvement(self, previous_state, current_state):
+        """
+        Compare two board states to detect improvements and calculate metrics.
+        Returns a dictionary of improvement metrics.
+        """
+        improvements = {
+            "new_cleared_lines": current_state["cleared_lines"] - previous_state["cleared_lines"],
+            "new_matching_pairs": current_state["matching_pairs"] - previous_state["matching_pairs"],
+            "new_matching_triples": current_state["matching_triples"] - previous_state["matching_triples"],
+            "potential_progress": 0
+        }
+
+        # Evaluate progress toward potential matches
+        curr_potentials = set((v, c) for v, c in current_state["potential_matches"])
+        prev_potentials = set((v, c) for v, c in previous_state["potential_matches"])
+
+        # New potential matches that didn't exist before
+        new_potentials = curr_potentials - prev_potentials
+        improvements["potential_progress"] = len(new_potentials)
+
+        return improvements
+
+    def _calculate_line_matching_reward(self, previous_state, current_state):
+        """
+        Calculate rewards based on board state improvements.
+        Returns a float representing the additional reward to be added.
+        """
+        improvements = self._evaluate_board_improvement(previous_state, current_state)
+        reward = 0.0
+
+        # Reward weights
+        CLEARED_LINE_REWARD = 2.0
+        MATCHING_PAIR_REWARD = 0.5
+        MATCHING_TRIPLE_REWARD = 1.0
+        POTENTIAL_PROGRESS_REWARD = 0.3
+
+        # Calculate composite reward
+        reward += improvements["new_cleared_lines"] * CLEARED_LINE_REWARD
+        reward += improvements["new_matching_pairs"] * MATCHING_PAIR_REWARD
+        reward += improvements["new_matching_triples"] * MATCHING_TRIPLE_REWARD
+        reward += improvements["potential_progress"] * POTENTIAL_PROGRESS_REWARD
+
+        return reward
+
+
     def step(self, action):
         self.iteration += 1
         self.total_actions_taken += 1
+        previous_state = self._get_board_state_summary()
 
         reward = 0
         done = False
@@ -892,6 +984,11 @@ class RLEnvironment(gym.Env):
 
             self.points.append(player_points[self.rl_name])
             done = True
+
+            current_state = self._get_board_state_summary()
+            # Calculate additional reward for matching progress
+            matching_reward = self._calculate_line_matching_reward(previous_state, current_state)
+            reward += matching_reward  # Add to existing reward
 
             # Calculate terminal state
             last_action = self.state[self.rl_name]["last_action"]
